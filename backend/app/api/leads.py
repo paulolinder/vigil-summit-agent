@@ -186,7 +186,8 @@ async def deletion_request(request: Request, payload: dict, background_tasks: Ba
 
 
 @router.post("/deletion-request/confirm")
-async def deletion_confirm(payload: dict):
+@limiter.limit("10/minute")
+async def deletion_confirm(request: Request, payload: dict):
     """Step 2: validates token from email body (not URL) and executes anonymization.
     Token is passed in request body to avoid URL logging / prefetch-triggered execution."""
     token = (payload.get("token") or "").strip()
