@@ -110,31 +110,39 @@ export default function FunnelBoard() {
         const ids = fetchedLeads.map(l => l.id)
         if (ids.length === 0) { setLoading(false); return }
 
-        // Try fetching with subject; fall back without it if the column doesn't exist
-        let msgRows: Message[] | null = null
-        try {
-          const { data, error: msgErr } = await supabase
-            .from('messages')
-            .select('lead_id, sent_at, opened_at, clicked_at, subject')
-            .in('lead_id', ids)
-            .eq('direction', 'OUT')
-            .order('sent_at', { ascending: false })
-          if (msgErr) throw msgErr
-          msgRows = (data ?? []) as Message[]
-        } catch {
-          const { data } = await supabase
-            .from('messages')
-            .select('lead_id, sent_at, opened_at, clicked_at')
-            .in('lead_id', ids)
-            .eq('direction', 'OUT')
-            .order('sent_at', { ascending: false })
-          msgRows = ((data ?? []) as Omit<Message, 'subject'>[]).map(m => ({ ...m, subject: null }))
+        // Try fetching with subject; fall back without it if the column doesn't exist (PGRST204)
+        const fetchMessages = async (): Promise<Message[]> => {
+          try {
+            const { data, error: msgErr } = await supabase
+              .from('messages')
+              .select('lead_id, sent_at, opened_at, clicked_at, subject')
+              .in('lead_id', ids)
+              .eq('direction', 'OUT')
+              .order('sent_at', { ascending: false })
+            if (msgErr && msgErr.code !== 'PGRST204') throw msgErr
+            if (!msgErr) return (data ?? []) as Message[]
+            // PGRST204: column doesn't exist — fall back
+            throw msgErr
+          } catch (err: unknown) {
+            const pgErr = err as { code?: string }
+            if (pgErr?.code !== 'PGRST204') throw err
+            const { data } = await supabase
+              .from('messages')
+              .select('lead_id, sent_at, opened_at, clicked_at')
+              .in('lead_id', ids)
+              .eq('direction', 'OUT')
+              .order('sent_at', { ascending: false })
+            return ((data ?? []) as Omit<Message, 'subject'>[]).map(m => ({ ...m, subject: null }))
+          }
         }
 
-        const { data: enrichRows } = await supabase
-          .from('lead_enrichment')
-          .select('lead_id, sector, company_size, is_decision_maker')
-          .in('lead_id', ids)
+        const [msgRows, { data: enrichRows }] = await Promise.all([
+          fetchMessages(),
+          supabase
+            .from('lead_enrichment')
+            .select('lead_id, sector, company_size, is_decision_maker')
+            .in('lead_id', ids),
+        ])
 
         const newEnrichMap = new Map<string, LeadEnrichment>()
         for (const row of (enrichRows ?? [])) {

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface FilterBarProps {
   search: string
@@ -20,6 +20,19 @@ export default function FilterBar({
   availableSectors, totalVisible, totalAll,
 }: FilterBarProps) {
   const [sectorOpen, setSectorOpen] = useState(false)
+  const sectorRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!sectorOpen) return
+    const handler = (e: MouseEvent) => {
+      if (sectorRef.current && !sectorRef.current.contains(e.target as Node)) {
+        setSectorOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [sectorOpen])
+
   const activeCount =
     (search ? 1 : 0) + (sectorFilter ? 1 : 0) + (decisionMakerOnly ? 1 : 0)
 
@@ -33,7 +46,7 @@ export default function FilterBar({
         className="flex-1 max-w-[280px] border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-600 placeholder:text-slate-300 focus:outline-none focus:border-navy-700"
       />
 
-      <div className="relative">
+      <div className="relative" ref={sectorRef}>
         <button
           onClick={() => setSectorOpen(v => !v)}
           className={`border rounded-2xl px-3 py-1 text-xs font-semibold transition-colors ${
