@@ -86,57 +86,45 @@ def create_lead(lead_data: LeadCreate, request: Request, background_tasks: Backg
 
 
 @router.post("/{lead_id}/checkin", dependencies=[Security(_require_api_key)])
-def checkin_lead(lead_id: str, background_tasks: BackgroundTasks):
-    from app.agent.state_machine import is_valid_transition
+async def checkin_lead(lead_id: str, background_tasks: BackgroundTasks):
     sb = get_supabase()
-
-    result = sb.table("leads").select("id, stage").eq("id", lead_id).single().execute()
-    if not result.data:
+    result = await asyncio.to_thread(
+        lambda: sb.rpc("atomic_transition_lead_stage", {
+            "p_lead_id": lead_id,
+            "p_target_stage": "ATTENDED",
+            "p_valid_from_stages": ["REGISTERED", "ENRICHED", "CONFIRMED"],
+        }).execute()
+    )
+    outcome = result.data
+    if outcome == "NOT_FOUND":
         raise HTTPException(status_code=404, detail="Lead não encontrado")
-
-    current_stage = result.data["stage"]
-
-    if current_stage == LeadStage.ATTENDED.value:
-        return {"status": "already_checked_in"}
-
-    if not is_valid_transition(current_stage, LeadStage.ATTENDED.value):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Transição inválida: {current_stage} → ATTENDED"
-        )
-
-    sb.table("leads").update({"stage": LeadStage.ATTENDED.value}).eq("id", lead_id).execute()
-
-    from app.agent.orchestrator import run_agent
-    background_tasks.add_task(run_agent, lead_id, "LEAD_ATTENDED")
-    return {"status": "checked_in"}
+    if outcome == "INVALID_TRANSITION":
+        raise HTTPException(status_code=409, detail="Transição inválida para ATTENDED")
+    if outcome == "OK":
+        from app.agent.orchestrator import run_agent
+        background_tasks.add_task(run_agent, lead_id, "LEAD_ATTENDED")
+    return {"status": "checked_in" if outcome == "OK" else "already_checked_in"}
 
 
 @router.post("/{lead_id}/no-show", dependencies=[Security(_require_api_key)])
-def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
-    from app.agent.state_machine import is_valid_transition
+async def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
     sb = get_supabase()
-
-    result = sb.table("leads").select("id, stage").eq("id", lead_id).single().execute()
-    if not result.data:
+    result = await asyncio.to_thread(
+        lambda: sb.rpc("atomic_transition_lead_stage", {
+            "p_lead_id": lead_id,
+            "p_target_stage": "NO_SHOW",
+            "p_valid_from_stages": ["REGISTERED", "ENRICHED", "CONFIRMED"],
+        }).execute()
+    )
+    outcome = result.data
+    if outcome == "NOT_FOUND":
         raise HTTPException(status_code=404, detail="Lead não encontrado")
-
-    current_stage = result.data["stage"]
-
-    if current_stage == LeadStage.NO_SHOW.value:
-        return {"status": "already_no_show"}
-
-    if not is_valid_transition(current_stage, LeadStage.NO_SHOW.value):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Transição inválida: {current_stage} → NO_SHOW"
-        )
-
-    sb.table("leads").update({"stage": LeadStage.NO_SHOW.value}).eq("id", lead_id).execute()
-
-    from app.agent.orchestrator import run_agent
-    background_tasks.add_task(run_agent, lead_id, "LEAD_NO_SHOW")
-    return {"status": "marked_no_show"}
+    if outcome == "INVALID_TRANSITION":
+        raise HTTPException(status_code=409, detail="Transição inválida para NO_SHOW")
+    if outcome == "OK":
+        from app.agent.orchestrator import run_agent
+        background_tasks.add_task(run_agent, lead_id, "LEAD_NO_SHOW")
+    return {"status": "marked_no_show" if outcome == "OK" else "already_no_show"}
 
 
 def _hash_token(token: str) -> str:

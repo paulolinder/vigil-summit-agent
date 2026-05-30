@@ -77,7 +77,7 @@ def test_create_lead_invalid_email_rejected(client):
     assert resp.status_code == 422
 
 def test_checkin_lead_not_found(client, mock_supabase):
-    mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = None
+    mock_supabase.return_value.rpc.return_value.execute.return_value.data = "NOT_FOUND"
 
     resp = client.post(
         "/api/leads/lead-inexistente/checkin",
@@ -338,3 +338,38 @@ def test_calcom_webhook_accepts_valid_signature(client):
         )
     assert resp.status_code == 200
     assert resp.json()["received"] is True
+
+
+def test_checkin_lead_success(client, mock_supabase, mock_bg_task):
+    """Successful checkin returns checked_in status."""
+    mock_supabase.return_value.rpc.return_value.execute.return_value.data = "OK"
+
+    resp = client.post(
+        "/api/leads/lead-001/checkin",
+        headers={"X-API-Key": TEST_API_KEY},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "checked_in"
+
+
+def test_checkin_lead_idempotent(client, mock_supabase):
+    """Second checkin returns already_checked_in (idempotent)."""
+    mock_supabase.return_value.rpc.return_value.execute.return_value.data = "ALREADY_SET"
+
+    resp = client.post(
+        "/api/leads/lead-001/checkin",
+        headers={"X-API-Key": TEST_API_KEY},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "already_checked_in"
+
+
+def test_checkin_lead_invalid_transition(client, mock_supabase):
+    """Checkin on OPTED_OUT or CONVERTED lead returns 409."""
+    mock_supabase.return_value.rpc.return_value.execute.return_value.data = "INVALID_TRANSITION"
+
+    resp = client.post(
+        "/api/leads/lead-001/checkin",
+        headers={"X-API-Key": TEST_API_KEY},
+    )
+    assert resp.status_code == 409
