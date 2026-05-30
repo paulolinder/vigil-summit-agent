@@ -31,13 +31,12 @@ async def _ping_anthropic() -> str:
 async def _ping_resend() -> str:
     try:
         async with httpx.AsyncClient(timeout=5) as c:
-            # GET /domains returns 200 with list (may be empty) for any valid key
+            # Fetch a non-existent email ID — valid key → 404, invalid key → 401
             r = await c.get(
-                "https://api.resend.com/domains",
+                "https://api.resend.com/emails/00000000-0000-0000-0000-000000000000",
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
             )
-            # 200 = ok, 403 = key valid but no domain perms (still active)
-            return "ok" if r.status_code in (200, 403) else "error"
+            return "ok" if r.status_code != 401 else "error"
     except Exception:
         return "error"
 
