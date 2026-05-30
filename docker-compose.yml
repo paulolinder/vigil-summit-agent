@@ -24,7 +24,7 @@ services:
       - CAL_EVENT_TYPE_ID=${CAL_EVENT_TYPE_ID:-}
       # Segurança
       - API_KEY=${API_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3030}
     restart: unless-stopped
 
   frontend:
