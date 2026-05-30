@@ -1,17 +1,15 @@
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Security
-from fastapi.security import APIKeyHeader
 from app.db.client import get_supabase
 from app.db.models import LeadCreate, LeadStage
 from app.config import settings
 from app.limiter import limiter
+from app.api.auth import require_api_key as _require_api_key
 from datetime import datetime, timezone, timedelta
 import hashlib
 import uuid
 import asyncio
 import secrets
 import resend
-
-_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def _get_real_ip(request: Request) -> str:
@@ -42,11 +40,6 @@ async def send_deletion_email(email: str, token: str) -> None:
             f"Equipe Vigil.AI"
         ),
     }))
-
-
-def _require_api_key(api_key: str | None = Security(_api_key_header)) -> None:
-    if not settings.api_key or api_key != settings.api_key:
-        raise HTTPException(status_code=401, detail="API key inválida ou ausente")
 
 
 router = APIRouter(prefix="/leads", tags=["leads"])

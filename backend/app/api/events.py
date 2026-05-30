@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException
+import asyncio
+from fastapi import APIRouter, HTTPException, Security
 from app.db.client import get_supabase
+from app.api.auth import require_api_key as _require_api_key
 
 router = APIRouter(prefix="/events", tags=["events"])
 
