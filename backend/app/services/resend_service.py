@@ -212,12 +212,86 @@ Equipe Vigil.AI"""
     },
 }
 
-SECTOR_CONTENT = {
-    "Financial Services": "conformidade LGPD na prática, Zero Trust para open banking e priorização inteligente de vulnerabilidades em ambiente regulado",
-    "Manufacturing": "segurança OT/ICS para chão de fábrica conectado, proteção de redes industriais e continuidade operacional",
-    "Healthcare": "proteção de dados de pacientes (LGPD + HIPAA), segurança em sistemas hospitalares e gestão de risco em infraestrutura crítica",
-    "Government": "conformidade com LGPD governamental, proteção de dados sensíveis e frameworks de segurança para setor público",
+_SECTOR_CONTENT_RAW = {
+    "financial": "conformidade LGPD na prática, Zero Trust para open banking e priorização inteligente de vulnerabilidades em ambiente regulado",
+    "manufacturing": "segurança OT/ICS para chão de fábrica conectado, proteção de redes industriais e continuidade operacional",
+    "healthcare": "proteção de dados de pacientes (LGPD + HIPAA), segurança em sistemas hospitalares e gestão de risco em infraestrutura crítica",
+    "government": "conformidade com LGPD governamental, proteção de dados sensíveis e frameworks de segurança para setor público",
+    "technology": "detecção de ameaças em pipelines CI/CD, segurança em ambientes cloud-native e resposta a incidentes em infraestrutura distribuída",
+    "retail": "proteção de dados de consumidores (PCI-DSS + LGPD), segurança em e-commerce e prevenção a fraudes digitais",
+    "energy": "segurança em infraestrutura crítica, proteção de sistemas SCADA e conformidade regulatória no setor elétrico",
+    "education": "proteção de dados de alunos (LGPD), segurança em ambientes EaD e gestão de identidade em larga escala",
+    "telecom": "segurança de rede em larga escala, proteção contra ataques DDoS e conformidade com regulações da Anatel",
 }
+
+# Mapping Apollo.io industry strings → normalized sector key
+_APOLLO_TO_SECTOR: dict[str, str] = {
+    # Financial
+    "financial services": "financial",
+    "banking": "financial",
+    "insurance": "financial",
+    "investment banking": "financial",
+    "capital markets": "financial",
+    "venture capital & private equity": "financial",
+    "accounting": "financial",
+    # Manufacturing / Industrial
+    "manufacturing": "manufacturing",
+    "automotive": "manufacturing",
+    "chemicals": "manufacturing",
+    "mining & metals": "manufacturing",
+    "industrial automation": "manufacturing",
+    "mechanical or industrial engineering": "manufacturing",
+    # Healthcare
+    "hospital & health care": "healthcare",
+    "health, wellness and fitness": "healthcare",
+    "medical devices": "healthcare",
+    "pharmaceuticals": "healthcare",
+    "biotechnology": "healthcare",
+    "medical practice": "healthcare",
+    # Government / Defense
+    "government administration": "government",
+    "defense & space": "government",
+    "law enforcement": "government",
+    "public safety": "government",
+    "political organization": "government",
+    # Technology
+    "information technology and services": "technology",
+    "computer software": "technology",
+    "internet": "technology",
+    "computer & network security": "technology",
+    "semiconductors": "technology",
+    "computer hardware": "technology",
+    "telecommunications": "telecom",
+    "wireless": "telecom",
+    # Retail / Consumer
+    "retail": "retail",
+    "consumer goods": "retail",
+    "food & beverages": "retail",
+    "e-commerce": "retail",
+    # Energy
+    "oil & energy": "energy",
+    "renewables & environment": "energy",
+    "utilities": "energy",
+    # Education
+    "education management": "education",
+    "higher education": "education",
+    "e-learning": "education",
+}
+
+
+def _resolve_sector_content(sector: str | None) -> str:
+    default = "gestão de riscos cibernéticos, conformidade LGPD e proteção de ativos digitais críticos"
+    if not sector:
+        return default
+    key = _APOLLO_TO_SECTOR.get(sector.lower().strip())
+    if key:
+        return _SECTOR_CONTENT_RAW[key]
+    # Partial match fallback
+    sl = sector.lower()
+    for apollo_key, normalized in _APOLLO_TO_SECTOR.items():
+        if apollo_key in sl or sl in apollo_key:
+            return _SECTOR_CONTENT_RAW[normalized]
+    return default
 
 async def send_email(lead: dict, template_key: str, custom_note: str = "", phase: str = "pre_event") -> dict:
     resend.api_key = settings.resend_api_key
@@ -226,8 +300,8 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
     if isinstance(enrichment, list):
         enrichment = enrichment[0] if enrichment else {}
 
-    sector = enrichment.get("sector", "tecnologia")
-    sector_content = SECTOR_CONTENT.get(sector, "gestão de riscos e conformidade em segurança cibernética")
+    sector = enrichment.get("sector", "")
+    sector_content = _resolve_sector_content(sector)
 
     template = TEMPLATES.get(template_key, TEMPLATES["welcome"])
 

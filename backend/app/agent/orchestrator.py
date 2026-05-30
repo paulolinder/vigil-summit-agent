@@ -33,7 +33,7 @@ async def run_agent(lead_id: str, trigger: str) -> str:
         sb = get_supabase()
         lead = await asyncio.to_thread(
             lambda: sb.table("leads")
-            .select("*, lead_enrichment(*)")
+            .select("*, lead_enrichment(*), events(*)")
             .eq("id", lead_id)
             .single()
             .execute()
