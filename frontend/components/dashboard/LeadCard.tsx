@@ -5,18 +5,18 @@ type Tag = { label: string; color: TagColor }
 type SignalColor = 'green' | 'amber' | 'gray' | 'red'
 
 const TAG_CLASSES: Record<TagColor, string> = {
-  navy:  'bg-blue-50 text-blue-700',
-  green: 'bg-green-50 text-green-700',
-  amber: 'bg-amber-50 text-amber-700',
-  red:   'bg-red-50 text-red-600',
-  slate: 'bg-slate-100 text-slate-500',
+  navy:  'bg-brand-teal/10 text-brand-teal',
+  green: 'bg-brand-green/10 text-brand-green',
+  amber: 'bg-brand-lime/20 text-[#6b7a00]',
+  red:   'bg-red-50 text-red-500',
+  slate: 'bg-brand-bg text-brand-muted',
 }
 
 const SIGNAL_DOT: Record<SignalColor, string> = {
-  green: 'bg-green-500',
-  amber: 'bg-amber-500',
-  gray:  'bg-slate-300',
-  red:   'bg-red-500',
+  green: 'bg-brand-green',
+  amber: 'bg-brand-lime',
+  gray:  'bg-brand-border',
+  red:   'bg-red-400',
 }
 
 function getTags(lead: RichLead): Tag[] {
@@ -63,11 +63,11 @@ export default function LeadCard({ lead, onClick }: { lead: RichLead; onClick?: 
   return (
     <div
         onClick={onClick}
-        className="bg-slate-50 border border-slate-200 rounded-md p-2.5 mb-1.5 cursor-pointer hover:border-navy-700 hover:bg-white hover:shadow-sm transition-all last:mb-0"
+        className="bg-white border border-brand-border rounded-[10px] p-2.5 mb-1.5 cursor-pointer hover:border-brand-teal hover:bg-white hover:shadow-sm transition-all last:mb-0"
       >
-      <p className="text-slate-900 text-xs font-bold mb-0.5 truncate">{shortName}</p>
+      <p className="text-brand-text text-xs font-bold mb-0.5 truncate">{shortName}</p>
       {roleLabel && (
-        <p className="text-slate-500 text-[10px] mb-1.5 truncate">{roleLabel}</p>
+        <p className="text-brand-muted text-[10px] mb-1.5 truncate">{roleLabel}</p>
       )}
       {tags.length > 0 && (
         <div className="flex gap-1 flex-wrap mb-1.5">
@@ -81,9 +81,9 @@ export default function LeadCard({ lead, onClick }: { lead: RichLead; onClick?: 
           ))}
         </div>
       )}
-      <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-100">
+      <div className="flex items-center gap-1.5 pt-1.5 border-t border-brand-bg">
         <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${SIGNAL_DOT[signal.color]}`} />
-        <span className="text-[9px] text-slate-400 truncate">{signal.text}</span>
+        <span className="text-[9px] text-brand-muted truncate">{signal.text}</span>
       </div>
     </div>
   )

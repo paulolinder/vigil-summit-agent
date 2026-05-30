@@ -1,22 +1,22 @@
 import type { BaseLead } from '@/lib/types'
 
 const FUNNEL_STAGES = [
-  { key: 'REGISTERED',        label: 'Inscritos',      color: '#0369a1' },
-  { key: 'ENRICHED',          label: 'Enriquecidos',   color: '#0369a1' },
-  { key: 'CONFIRMED',         label: 'Confirmados',    color: '#16a34a' },
-  { key: 'ATTENDED',          label: 'Presentes',      color: '#0369a1' },
-  { key: 'NO_SHOW',           label: 'No-show',        color: '#dc2626' },
-  { key: 'MEETING_SCHEDULED', label: 'Reunião agend.', color: '#d97706' },
-  { key: 'CONVERTED',         label: 'Convertidos',    color: '#059669' },
+  { key: 'REGISTERED',        label: 'Inscritos',      color: '#48C2C5' },
+  { key: 'ENRICHED',          label: 'Enriquecidos',   color: '#48C2C5' },
+  { key: 'CONFIRMED',         label: 'Confirmados',    color: '#59BD75' },
+  { key: 'ATTENDED',          label: 'Presentes',      color: '#48C2C5' },
+  { key: 'NO_SHOW',           label: 'No-show',        color: '#f87171' },
+  { key: 'MEETING_SCHEDULED', label: 'Reunião agend.', color: '#DDEB4F' },
+  { key: 'CONVERTED',         label: 'Convertidos',    color: '#59BD75' },
 ] as const
 
 // Sequential flow for conversion rate: excludes NO_SHOW (branch)
 const SEQ = ['REGISTERED', 'ENRICHED', 'CONFIRMED', 'ATTENDED', 'MEETING_SCHEDULED', 'CONVERTED']
 
 function rateColor(rate: number): string {
-  if (rate >= 70) return 'text-green-600'
-  if (rate >= 50) return 'text-amber-600'
-  return 'text-red-500'
+  if (rate >= 70) return 'text-brand-green'
+  if (rate >= 50) return 'text-[#6b7a00]'
+  return 'text-red-400'
 }
 
 export default function FunnelChart({ leads }: { leads: BaseLead[] }) {
@@ -51,34 +51,34 @@ export default function FunnelChart({ leads }: { leads: BaseLead[] }) {
 
           return (
             <div key={stage.key} className="flex items-center gap-2">
-              <span className="w-[72px] text-[10px] text-slate-400 text-right flex-shrink-0 truncate">
+              <span className="w-[72px] text-[10px] text-brand-muted text-right flex-shrink-0 truncate">
                 {stage.label}
               </span>
-              <div className="flex-1 bg-slate-100 rounded-sm h-3">
+              <div className="flex-1 bg-brand-bg rounded-sm h-3">
                 <div
                   className="h-full rounded-sm transition-all duration-300"
                   style={{ width: `${pct}%`, backgroundColor: stage.color }}
                 />
               </div>
-              <span className="w-6 text-[10px] font-bold text-slate-500">{stage.count}</span>
-              <span className={`w-8 text-[9px] text-right ${rate !== null ? rateColor(rate) : 'text-slate-300'}`}>
+              <span className="w-6 text-[10px] font-bold text-brand-muted">{stage.count}</span>
+              <span className={`w-8 text-[9px] text-right ${rate !== null ? rateColor(rate) : 'text-brand-border'}`}>
                 {rate !== null ? `${rate}%` : '—'}
               </span>
             </div>
           )
         })}
       </div>
-      <div className="mt-3 pt-2.5 border-t border-slate-100 flex gap-4 flex-wrap">
-        <p className="text-[10px] text-slate-400">
+      <div className="mt-3 pt-2.5 border-t border-brand-border flex gap-4 flex-wrap">
+        <p className="text-[10px] text-brand-muted">
           Comparecimento:{' '}
-          <strong className="text-slate-700">{attendanceRate}%</strong>
+          <strong className="text-brand-text">{attendanceRate}%</strong>
           {attendanceRate >= 70
-            ? <span className="text-green-600 ml-1">✓ meta</span>
-            : <span className="text-red-500 ml-1"> abaixo da meta</span>
+            ? <span className="text-brand-green ml-1">✓ meta</span>
+            : <span className="text-red-400 ml-1"> abaixo da meta</span>
           }
         </p>
-        <p className="text-[10px] text-slate-400">
-          Conversão total: <strong className="text-slate-700">{conversionRate}%</strong>
+        <p className="text-[10px] text-brand-muted">
+          Conversão total: <strong className="text-brand-text">{conversionRate}%</strong>
         </p>
       </div>
     </div>

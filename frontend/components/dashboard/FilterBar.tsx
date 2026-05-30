@@ -43,7 +43,7 @@ export default function FilterBar({
         value={search}
         onChange={e => onSearchChange(e.target.value)}
         placeholder="Buscar por nome ou empresa..."
-        className="flex-1 max-w-[280px] border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-600 placeholder:text-slate-300 focus:outline-none focus:border-navy-700"
+        className="flex-1 max-w-[280px] border border-brand-border rounded-md px-3 py-1.5 text-xs text-brand-muted placeholder:text-brand-border focus:outline-none focus:border-brand-teal"
       />
 
       <div className="relative" ref={sectorRef}>
@@ -51,8 +51,8 @@ export default function FilterBar({
           onClick={() => setSectorOpen(v => !v)}
           className={`border rounded-2xl px-3 py-1 text-xs font-semibold transition-colors ${
             sectorFilter
-              ? 'bg-blue-50 border-navy-700 text-navy-700'
-              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+              ? 'bg-brand-teal/10 border-brand-teal text-brand-teal'
+              : 'bg-white border-brand-border text-brand-muted hover:border-brand-teal'
           }`}
         >
           {sectorFilter ?? 'Setor'} ▾
@@ -61,7 +61,7 @@ export default function FilterBar({
           <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-md z-10 min-w-[160px]">
             <button
               onClick={() => { onSectorChange(null); setSectorOpen(false) }}
-              className="w-full text-left px-3 py-2 text-xs text-slate-500 hover:bg-slate-50"
+              className="w-full text-left px-3 py-2 text-xs text-brand-muted hover:bg-brand-bg"
             >
               Todos os setores
             </button>
@@ -69,8 +69,8 @@ export default function FilterBar({
               <button
                 key={s}
                 onClick={() => { onSectorChange(s); setSectorOpen(false) }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 ${
-                  sectorFilter === s ? 'text-navy-700 font-semibold' : 'text-slate-600'
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-brand-bg ${
+                  sectorFilter === s ? 'text-brand-teal font-semibold' : 'text-brand-muted'
                 }`}
               >
                 {s}
@@ -84,14 +84,14 @@ export default function FilterBar({
         onClick={() => onDecisionMakerChange(!decisionMakerOnly)}
         className={`border rounded-2xl px-3 py-1 text-xs font-semibold transition-colors ${
           decisionMakerOnly
-            ? 'bg-blue-50 border-navy-700 text-navy-700'
-            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+            ? 'bg-brand-teal/10 border-brand-teal text-brand-teal'
+            : 'bg-white border-brand-border text-brand-muted hover:border-brand-teal'
         }`}
       >
         {decisionMakerOnly ? 'Decisores ✓' : 'Decisores'}
       </button>
 
-      <span className="ml-auto text-[10px] text-slate-400">
+      <span className="ml-auto text-[10px] text-brand-muted">
         {totalVisible !== totalAll
           ? `${totalVisible} de ${totalAll} leads`
           : `${totalAll} leads`}

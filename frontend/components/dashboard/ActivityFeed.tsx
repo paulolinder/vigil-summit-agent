@@ -1,9 +1,9 @@
 import type { ActivityEvent } from '@/lib/types'
 
 const DOT_COLOR: Record<ActivityEvent['type'], string> = {
-  clicked: 'bg-amber-500',
-  opened:  'bg-green-500',
-  sent:    'bg-navy-700',
+  clicked: 'bg-brand-lime',
+  opened:  'bg-brand-green',
+  sent:    'bg-brand-teal',
 }
 
 const EVENT_LABEL: Record<ActivityEvent['type'], string> = {
@@ -29,20 +29,20 @@ export default function ActivityFeed({ events }: { events: ActivityEvent[] }) {
         Atividade do Agente
       </p>
       {events.length === 0 ? (
-        <p className="text-xs text-slate-300 text-center py-8">Nenhuma atividade registrada</p>
+        <p className="text-xs text-brand-border text-center py-8">Nenhuma atividade registrada</p>
       ) : (
         <div className="flex flex-col overflow-y-auto">
           {events.map((ev, i) => (
             <div
               key={`${ev.leadId}-${ev.type}-${ev.timestamp}-${i}`}
-              className="flex items-start gap-2 py-1.5 border-b border-slate-50 last:border-0"
+              className="flex items-start gap-2 py-1.5 border-b border-brand-bg last:border-0"
             >
               <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 ${DOT_COLOR[ev.type]}`} />
-              <p className="text-[11px] text-slate-500 flex-1 leading-snug">
-                <strong className="text-slate-800 font-semibold">{ev.leadName}</strong>{' '}
+              <p className="text-[11px] text-brand-muted flex-1 leading-snug">
+                <strong className="text-brand-text font-semibold">{ev.leadName}</strong>{' '}
                 {EVENT_LABEL[ev.type]}
               </p>
-              <span className="text-[10px] text-slate-300 flex-shrink-0 mt-0.5">
+              <span className="text-[10px] text-brand-border flex-shrink-0 mt-0.5">
                 {relativeTime(ev.timestamp)}
               </span>
             </div>
