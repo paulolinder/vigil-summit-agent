@@ -46,7 +46,22 @@ export async function POST(request: NextRequest) {
   const { password } = await request.json()
   const expected = process.env.DASHBOARD_PASSWORD
 
-  if (!expected || password !== expected) {
+  if (!expected) {
+    return NextResponse.json({ error: 'Senha não configurada' }, { status: 503 })
+  }
+
+  // Timing-safe comparison: hash both values to equal-length buffers before XOR,
+  // preventing timing attacks that would reveal characters of the correct password.
+  const enc = new TextEncoder()
+  const [pwHash, exHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(password)),
+    crypto.subtle.digest('SHA-256', enc.encode(expected)),
+  ])
+  const pwBytes = new Uint8Array(pwHash)
+  const exBytes = new Uint8Array(exHash)
+  let diff = 0
+  for (let i = 0; i < pwBytes.length; i++) diff |= pwBytes[i] ^ exBytes[i]
+  if (diff !== 0) {
     return NextResponse.json({ error: 'Senha incorreta' }, { status: 401 })
   }
 

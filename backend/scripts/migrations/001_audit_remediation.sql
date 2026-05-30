@@ -61,15 +61,17 @@ END;
 $$;
 
 -- 6. Table for LGPD deletion tokens (used by Task 5)
+-- token_hash stores SHA-256(plaintext_token) — plaintext only travels in the confirmation email.
+-- A DB leak of token_hash cannot be used to confirm deletions within the 24h window.
 CREATE TABLE IF NOT EXISTS deletion_tokens (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email      text NOT NULL,
-  token      text UNIQUE NOT NULL,
+  token_hash text UNIQUE NOT NULL,
   expires_at timestamptz NOT NULL,
   used_at    timestamptz,
   created_at timestamptz DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_deletion_tokens_token ON deletion_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_deletion_tokens_hash ON deletion_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_deletion_tokens_email ON deletion_tokens(email);
 
 -- 7. Status column in messages for transactional outbox (used by Task 9)

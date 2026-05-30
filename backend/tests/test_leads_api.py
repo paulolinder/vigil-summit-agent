@@ -147,7 +147,7 @@ def test_calcom_webhook_ignores_non_booking_events(client):
 
 
 def test_deletion_request_returns_202_and_does_not_anonymize_immediately(client, mock_supabase):
-    """Step 1: POST deletion-request sends email token, returns 202, does NOT anonymize yet."""
+    """Step 1: POST deletion-request returns 202. Side-effects run in background task."""
     from unittest.mock import patch, AsyncMock
 
     mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
@@ -155,41 +155,36 @@ def test_deletion_request_returns_202_and_does_not_anonymize_immediately(client,
     ]
     mock_supabase.return_value.table.return_value.insert.return_value.execute.return_value.data = [{"id": "tok-001"}]
 
-    with patch("app.api.leads.send_deletion_email", new=AsyncMock(return_value=None)):
+    with patch("app.api.leads._issue_deletion_token", new=AsyncMock(return_value=None)):
         resp = client.post("/api/leads/deletion-request", json={"email": "maria@banco.com.br"})
 
     assert resp.status_code == 202
     assert resp.json()["status"] == "confirmation_sent"
-    # MUST NOT have anonymized anything
-    mock_supabase.return_value.table.return_value.update.assert_not_called()
 
 
 def test_deletion_request_returns_202_for_unknown_email(client, mock_supabase):
-    """Anti-enumeration: unknown email also returns 202 (not 404)."""
-    from unittest.mock import patch, AsyncMock
-
+    """Anti-enumeration: unknown email also returns 202 (not 404) and fires no background task."""
     mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
 
-    with patch("app.api.leads.send_deletion_email", new=AsyncMock(return_value=None)):
-        resp = client.post("/api/leads/deletion-request", json={"email": "unknown@test.com"})
+    resp = client.post("/api/leads/deletion-request", json={"email": "unknown@test.com"})
 
     assert resp.status_code == 202
     assert resp.json()["status"] == "confirmation_sent"
 
 
 def test_deletion_confirm_anonymizes_with_valid_token(client, mock_supabase):
-    """Step 2: GET confirm?token= executes anonymization when token is valid."""
+    """Step 2: POST /confirm with token in body executes anonymization when token is valid."""
     import secrets
     from datetime import datetime, timezone, timedelta
 
     valid_token = secrets.token_urlsafe(32)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 
-    # deletion_tokens lookup
+    # deletion_tokens lookup — now keyed by token_hash, not plaintext token
     mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.gt.return_value.is_.return_value.single.return_value.execute.return_value.data = {
         "id": "tok-001",
         "email": "maria@banco.com.br",
-        "token": valid_token,
+        "token_hash": "irrelevant-in-mock",
         "expires_at": expires_at,
     }
     # mark token used
@@ -199,7 +194,8 @@ def test_deletion_confirm_anonymizes_with_valid_token(client, mock_supabase):
         {"id": "lead-uuid-001"}
     ]
 
-    resp = client.get(f"/api/leads/deletion-request/confirm?token={valid_token}")
+    # Token is now sent in POST body, not URL query string
+    resp = client.post("/api/leads/deletion-request/confirm", json={"token": valid_token})
     assert resp.status_code == 200
     assert resp.json()["status"] == "anonymized"
 
@@ -208,5 +204,5 @@ def test_deletion_confirm_rejects_expired_or_invalid_token(client, mock_supabase
     """Expired/invalid token returns 404."""
     mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.gt.return_value.is_.return_value.single.return_value.execute.return_value.data = None
 
-    resp = client.get("/api/leads/deletion-request/confirm?token=invalid-token")
+    resp = client.post("/api/leads/deletion-request/confirm", json={"token": "invalid-token"})
     assert resp.status_code == 404

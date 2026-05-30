@@ -5,6 +5,7 @@ from app.db.models import LeadCreate, LeadStage
 from app.config import settings
 from app.limiter import limiter
 from datetime import datetime, timezone, timedelta
+import hashlib
 import uuid
 import asyncio
 import secrets
@@ -97,46 +98,63 @@ def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
     return {"status": "marked_no_show"}
 
 
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _issue_deletion_token(sb, email: str) -> None:
+    """Inserts a hashed deletion token and sends the confirmation email.
+    Only called when the email exists — runs as a background task so the
+    response time is identical for existing and non-existing emails."""
+    token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(token)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+    await asyncio.to_thread(lambda: sb.table("deletion_tokens").insert({
+        "email": email,
+        "token_hash": token_hash,
+        "expires_at": expires_at,
+    }).execute())
+    await send_deletion_email(email, token)
+
+
 @router.post("/deletion-request", status_code=202)
 @limiter.limit("5/minute")
-async def deletion_request(request: Request, payload: dict):
-    """Step 1: receives email, sends confirmation token. Does NOT anonymize yet."""
+async def deletion_request(request: Request, payload: dict, background_tasks: BackgroundTasks):
+    """Step 1: receives email, sends confirmation token via background task.
+    Returns 202 regardless of whether email exists (anti-enumeration + timing-safe)."""
     sb = get_supabase()
     email = (payload.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="email é obrigatório")
 
     result = await asyncio.to_thread(
-        lambda: sb.table("leads").select("id, email").eq("email", email).execute()
+        lambda: sb.table("leads").select("id").eq("email", email).execute()
     )
 
     if result.data:
-        token = secrets.token_urlsafe(32)
-        expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-        await asyncio.to_thread(lambda: sb.table("deletion_tokens").insert({
-            "email": email,
-            "token": token,
-            "expires_at": expires_at,
-        }).execute())
-        await send_deletion_email(email, token)
+        # Use BackgroundTasks so both branches (found/not-found) return at the same time,
+        # eliminating the timing side-channel that would reveal email existence.
+        background_tasks.add_task(_issue_deletion_token, sb, email)
 
-    # Return 202 regardless — prevents email enumeration
     return {"status": "confirmation_sent"}
 
 
-@router.get("/deletion-request/confirm")
-async def deletion_confirm(token: str):
-    """Step 2: validates token from email and executes anonymization."""
+@router.post("/deletion-request/confirm")
+async def deletion_confirm(payload: dict):
+    """Step 2: validates token from email body (not URL) and executes anonymization.
+    Token is passed in request body to avoid URL logging / prefetch-triggered execution."""
+    token = (payload.get("token") or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="token é obrigatório")
 
+    token_hash = _hash_token(token)
     sb = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
 
     token_row = await asyncio.to_thread(lambda: (
         sb.table("deletion_tokens")
         .select("*")
-        .eq("token", token)
+        .eq("token_hash", token_hash)
         .gt("expires_at", now)
         .is_("used_at", "null")
         .single()
