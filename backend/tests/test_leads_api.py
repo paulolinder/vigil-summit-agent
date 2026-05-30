@@ -29,6 +29,8 @@ def mock_bg_task():
         yield mock
 
 def test_create_lead_success(client, mock_supabase, mock_bg_task):
+    # events table check (new validation)
+    mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {"id": "event-uuid-001"}
     mock_supabase.return_value.table.return_value.insert.return_value.execute.return_value.data = [{
         "id": "lead-uuid-001",
         "stage": "REGISTERED"
@@ -206,3 +208,69 @@ def test_deletion_confirm_rejects_expired_or_invalid_token(client, mock_supabase
 
     resp = client.post("/api/leads/deletion-request/confirm", json={"token": "invalid-token"})
     assert resp.status_code == 404
+
+
+def test_create_lead_captures_real_ip_from_forwarded_for(client, mock_supabase, mock_bg_task):
+    """consent_ip must be the first IP from X-Forwarded-For, not the proxy IP."""
+    captured = {}
+    original_insert = mock_supabase.return_value.table.return_value.insert
+
+    def capture(data):
+        captured.update(data)
+        return original_insert.return_value
+
+    mock_supabase.return_value.table.return_value.insert.side_effect = capture
+    mock_supabase.return_value.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "lead-uuid-001", "stage": "REGISTERED"}
+    ]
+    mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {"id": "event-001"}
+
+    resp = client.post(
+        "/api/leads/",
+        json={
+            "event_id": "event-001",
+            "name": "Test User",
+            "email": "test@example.com",
+            "company": "Test Co",
+            "role": "CTO",
+            "consent": True,
+        },
+        headers={"X-Forwarded-For": "203.0.113.42, 10.0.0.1"},
+    )
+    assert resp.status_code == 201
+    assert captured.get("consent_ip") == "203.0.113.42"
+
+
+def test_create_lead_rejects_invalid_event_id(client, mock_supabase):
+    """Lead creation must return 404 if event_id doesn't exist."""
+    mock_supabase.return_value.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = None
+
+    resp = client.post("/api/leads/", json={
+        "event_id": "evento-inexistente",
+        "name": "Test",
+        "email": "test@example.com",
+        "company": "Co",
+        "role": "CTO",
+        "consent": True,
+    })
+    assert resp.status_code == 404
+
+
+def test_list_leads_accepts_pagination_params(client, mock_supabase):
+    """GET /api/leads/ must pass limit/offset to the query."""
+    mock_supabase.return_value.table.return_value.select.return_value.range.return_value.execute.return_value.data = []
+
+    resp = client.get(
+        "/api/leads/?limit=50&offset=100",
+        headers={"X-API-Key": TEST_API_KEY}
+    )
+    assert resp.status_code == 200
+
+
+def test_list_leads_rejects_limit_over_500(client):
+    """limit > 500 must return 400."""
+    resp = client.get(
+        "/api/leads/?limit=501",
+        headers={"X-API-Key": TEST_API_KEY}
+    )
+    assert resp.status_code == 400

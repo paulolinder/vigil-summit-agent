@@ -14,6 +14,17 @@ import resend
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+def _get_real_ip(request: Request) -> str:
+    """Extracts real client IP, respecting X-Forwarded-For from reverse proxies."""
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP", "")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
 async def send_deletion_email(email: str, token: str) -> None:
     """Sends LGPD deletion confirmation email to the data subject."""
     from app.config import settings as _settings
@@ -45,11 +56,17 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 @limiter.limit("10/minute")
 def create_lead(lead_data: LeadCreate, request: Request, background_tasks: BackgroundTasks):
     sb = get_supabase()
-    client_ip = request.client.host if request.client else "unknown"
+
+    event_check = sb.table("events").select("id").eq("id", lead_data.event_id).single().execute()
+    if not event_check.data:
+        raise HTTPException(status_code=404, detail="Evento não encontrado")
+
+    client_ip = _get_real_ip(request)
 
     data = lead_data.model_dump(exclude={"consent", "whatsapp_consent"})
     data["consent_at"] = datetime.now(timezone.utc).isoformat()
     data["consent_ip"] = client_ip
+    data["consent_version"] = "v1.0"
     data["stage"] = LeadStage.REGISTERED.value
     if lead_data.whatsapp_consent:
         data["whatsapp_consent_at"] = data["consent_at"]
@@ -240,10 +257,14 @@ async def deletion_confirm(payload: dict):
 
 
 @router.get("/", dependencies=[Security(_require_api_key)])
-def list_leads(event_id: str | None = None):
+def list_leads(event_id: str | None = None, limit: int = 100, offset: int = 0):
+    if limit > 500:
+        raise HTTPException(status_code=400, detail="Parâmetro 'limit' máximo é 500")
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="Parâmetro 'limit' mínimo é 1")
     sb = get_supabase()
     query = sb.table("leads").select("*, lead_enrichment(*)")
     if event_id:
         query = query.eq("event_id", event_id)
-    result = query.execute()
-    return result.data
+    result = query.range(offset, offset + limit - 1).execute()
+    return {"data": result.data, "limit": limit, "offset": offset, "count": len(result.data)}
