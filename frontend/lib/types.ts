@@ -44,3 +44,28 @@ export type ActivityEvent = {
   leadId: string
   leadName: string
 }
+
+export type ServiceStatus = {
+  name: string
+  role: string
+  status: 'ok' | 'warn' | 'error' | 'checking'
+  detail: string
+}
+
+export type JobRow = {
+  id: string
+  lead_id: string
+  job_type: string
+  run_at: string
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'SKIPPED'
+  error: string | null
+  created_at: string
+  leads: { name: string | null; company: string | null; role: string | null } | null
+}
+
+export type EventConfig = {
+  id: string
+  name: string
+  event_date: string
+  capacity: number | null
+}
