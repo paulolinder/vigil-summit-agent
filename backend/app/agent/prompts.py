@@ -1,6 +1,16 @@
 import asyncio
+import re
 from datetime import datetime, timezone, timedelta
 from app.db.client import get_supabase
+
+# Strip control chars / newlines and cap length on any externally-influenced
+# value before it enters the system prompt. Defends against prompt injection
+# via lead-supplied fields (role, company) or Apollo.io enrichment data.
+_CONTROL_CHARS = re.compile(r"[\r\n\x00-\x1f\x7f]")
+
+
+def _safe(value, max_len: int) -> str:
+    return _CONTROL_CHARS.sub(" ", str(value or "")).strip()[:max_len]
 
 
 async def build_system_prompt(lead: dict, trigger: str) -> str:
@@ -21,11 +31,6 @@ async def build_system_prompt(lead: dict, trigger: str) -> str:
         except Exception:
             pass
 
-    enrichment_summary = (
-        enrichment.get("enrichment_summary")
-        or "Lead ainda não enriquecido — chame enrich_lead() antes de qualquer comunicação."
-    )
-
     lead_id = lead.get("id", "")
     last_message_at, last_opened, last_clicked = await _fetch_last_engagement(lead_id)
     last_5_memory = await _fetch_memory(lead_id)
@@ -37,10 +42,13 @@ async def build_system_prompt(lead: dict, trigger: str) -> str:
 
     regua = _build_regua(trigger, event_date, stage, is_dm, has_companion)
 
-    sector = enrichment.get("sector", "N/A")
-    role_val = enrichment.get("real_role") or lead.get("role") or "profissional"
-    company_val = enrichment.get("company") or lead.get("company") or "empresa"
-    enrichment_summary_text = enrichment.get("enrichment_summary") or "Lead ainda não enriquecido."
+    # Sanitize all externally-influenced values before f-string interpolation
+    sector = _safe(enrichment.get("sector") or "N/A", 60)
+    role_val = _safe(enrichment.get("real_role") or lead.get("role") or "profissional", 80)
+    company_val = _safe(enrichment.get("company") or lead.get("company") or "empresa", 120)
+    enrichment_summary_text = _safe(
+        enrichment.get("enrichment_summary") or "Lead ainda não enriquecido.", 500
+    )
 
     return f"""Você é o agente comercial autônomo do Vigil Summit — evento de cibersegurança da Vigil.AI, São Paulo, 15 Ago 2026.
 
