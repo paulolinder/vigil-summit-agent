@@ -8,6 +8,7 @@ import ActivityFeed from './ActivityFeed'
 import FilterBar from './FilterBar'
 import LeadDrawer from './LeadDrawer'
 import type { RichLead, LeadEnrichment, LastMessage, BaseLead, Message, ActivityEvent } from '@/lib/types'
+import ConfigPanel from './ConfigPanel'
 
 const STAGES = [
   { key: 'REGISTERED',        label: 'Inscritos',        color: 'border-navy-700',    titleColor: 'text-navy-700'   },
@@ -94,6 +95,7 @@ export default function FunnelBoard() {
 
   // Drawer state
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'funnel' | 'config'>('funnel')
 
   useEffect(() => {
     fetch('/api/leads', { cache: 'no-store' })
@@ -349,74 +351,106 @@ export default function FunnelBoard() {
         ))}
       </div>
 
-      {/* MIDDLE ROW: Funnel Chart + Activity Feed */}
-      <div className="px-8 py-5 grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
-        <FunnelChart leads={leads} />
-        <ActivityFeed events={activityEvents} />
+      {/* TAB BAR */}
+      <div className="bg-white border-b border-slate-200 px-8 flex gap-0">
+        <button
+          onClick={() => setActiveTab('funnel')}
+          className={`py-3 px-5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
+            activeTab === 'funnel'
+              ? 'border-navy-700 text-navy-700'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          📊 Funil de Leads
+        </button>
+        <button
+          onClick={() => setActiveTab('config')}
+          className={`py-3 px-5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
+            activeTab === 'config'
+              ? 'border-navy-700 text-navy-700'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          ⚙ Configurações
+        </button>
       </div>
 
-      {/* FILTER BAR */}
-      <FilterBar
-        search={search}
-        onSearchChange={setSearch}
-        sectorFilter={sectorFilter}
-        onSectorChange={setSectorFilter}
-        decisionMakerOnly={decisionMakerOnly}
-        onDecisionMakerChange={setDecisionMakerOnly}
-        availableSectors={availableSectors}
-        totalVisible={filteredLeads.length}
-        totalAll={richLeads.length}
-      />
-
-      {/* KANBAN */}
-      <div className="px-8 pb-8">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="font-playfair font-extrabold text-xl text-slate-900">Funil de Leads</h2>
-            <p className="text-slate-400 text-xs mt-0.5">
-              Atualização em tempo real — {total} leads carregados
-            </p>
+      {activeTab === 'funnel' && (
+        <>
+          {/* MIDDLE ROW: Funnel Chart + Activity Feed */}
+          <div className="px-8 py-5 grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4">
+            <FunnelChart leads={leads} />
+            <ActivityFeed events={activityEvents} />
           </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5 text-slate-500 text-xs font-semibold">
-            📅 Vigil Summit · 15 Ago 2026
-          </div>
-        </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {STAGES.map(({ key, label, color, titleColor }) => {
-            const stageLeads = filteredLeads.filter(l => l.stage === key)
-            return (
-              <div key={key} className="flex-shrink-0 w-[220px] flex flex-col">
-                <div
-                  className={`bg-white border border-b-0 border-slate-200 [border-top-width:3px] ${color} rounded-t-lg px-3 py-2 flex items-center justify-between`}
-                >
-                  <span className={`text-[10px] font-bold uppercase tracking-[0.08em] ${titleColor}`}>
-                    {label}
-                  </span>
-                  <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center">
-                    {stageLeads.length || '—'}
-                  </span>
-                </div>
-                <div className="bg-white border border-slate-200 rounded-b-lg p-2 flex-1 min-h-[100px]">
-                  {stageLeads.length === 0 ? (
-                    <p className="text-slate-200 text-xs text-center pt-6">
-                      {key === 'ATTENDED' ? 'Dia do evento · 15 Ago' : '—'}
-                    </p>
-                  ) : (
-                    stageLeads.map(lead => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        onClick={() => setSelectedLeadId(lead.id)}
-                      />
-                    ))
-                  )}
-                </div>
+          {/* FILTER BAR */}
+          <FilterBar
+            search={search}
+            onSearchChange={setSearch}
+            sectorFilter={sectorFilter}
+            onSectorChange={setSectorFilter}
+            decisionMakerOnly={decisionMakerOnly}
+            onDecisionMakerChange={setDecisionMakerOnly}
+            availableSectors={availableSectors}
+            totalVisible={filteredLeads.length}
+            totalAll={richLeads.length}
+          />
+
+          {/* KANBAN */}
+          <div className="px-8 pb-8">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="font-playfair font-extrabold text-xl text-slate-900">Funil de Leads</h2>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Atualização em tempo real — {total} leads carregados
+                </p>
               </div>
-            )
-          })}
-        </div>
-      </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5 text-slate-500 text-xs font-semibold">
+                📅 Vigil Summit · 15 Ago 2026
+              </div>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-4">
+              {STAGES.map(({ key, label, color, titleColor }) => {
+                const stageLeads = filteredLeads.filter(l => l.stage === key)
+                return (
+                  <div key={key} className="flex-shrink-0 w-[220px] flex flex-col">
+                    <div
+                      className={`bg-white border border-b-0 border-slate-200 [border-top-width:3px] ${color} rounded-t-lg px-3 py-2 flex items-center justify-between`}
+                    >
+                      <span className={`text-[10px] font-bold uppercase tracking-[0.08em] ${titleColor}`}>
+                        {label}
+                      </span>
+                      <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center">
+                        {stageLeads.length || '—'}
+                      </span>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-b-lg p-2 flex-1 min-h-[100px]">
+                      {stageLeads.length === 0 ? (
+                        <p className="text-slate-200 text-xs text-center pt-6">
+                          {key === 'ATTENDED' ? 'Dia do evento · 15 Ago' : '—'}
+                        </p>
+                      ) : (
+                        stageLeads.map(lead => (
+                          <LeadCard
+                            key={lead.id}
+                            lead={lead}
+                            onClick={() => setSelectedLeadId(lead.id)}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'config' && (
+        <ConfigPanel totalLeads={leads.length} />
+      )}
 
       {/* LEAD DRAWER */}
       {selectedLead && (
