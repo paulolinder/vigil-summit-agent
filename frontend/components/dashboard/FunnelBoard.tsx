@@ -348,23 +348,23 @@ export default function FunnelBoard() {
       </div>
 
       {/* TAB BAR */}
-      <div className="bg-brand-navy border-b border-white/10 px-8 flex gap-0">
+      <div className="bg-white border-b border-brand-border px-8 flex gap-0">
         <button
           onClick={() => setActiveTab('funnel')}
-          className={`py-3 px-5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
+          className={`py-3 px-5 text-xs font-bold border-b-2 transition-colors -mb-px ${
             activeTab === 'funnel'
               ? 'border-brand-teal text-brand-teal'
-              : 'border-transparent text-white/40 hover:text-white/70'
+              : 'border-transparent text-brand-muted hover:text-brand-text hover:border-brand-border'
           }`}
         >
           📊 Funil de Leads
         </button>
         <button
           onClick={() => setActiveTab('config')}
-          className={`py-3 px-5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
+          className={`py-3 px-5 text-xs font-bold border-b-2 transition-colors -mb-px ${
             activeTab === 'config'
               ? 'border-brand-teal text-brand-teal'
-              : 'border-transparent text-white/40 hover:text-white/70'
+              : 'border-transparent text-brand-muted hover:text-brand-text hover:border-brand-border'
           }`}
         >
           ⚙ Configurações
