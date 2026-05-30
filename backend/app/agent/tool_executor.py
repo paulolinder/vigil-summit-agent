@@ -127,6 +127,7 @@ async def _check_engagement(lead_id: str, sb) -> str:
         .eq("lead_id", lead_id)
         .eq("direction", "OUT")
         .eq("channel", "EMAIL")
+        .eq("status", "SENT")
         .order("sent_at", desc=True)
         .limit(1)
         .execute()
