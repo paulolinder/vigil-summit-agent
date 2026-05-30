@@ -4,10 +4,32 @@ from app.db.client import get_supabase
 from app.db.models import LeadCreate, LeadStage
 from app.config import settings
 from app.limiter import limiter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
+import asyncio
+import secrets
+import resend
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def send_deletion_email(email: str, token: str) -> None:
+    """Sends LGPD deletion confirmation email to the data subject."""
+    from app.config import settings as _settings
+    resend.api_key = _settings.resend_api_key
+    confirm_url = f"{_settings.frontend_url}/deletion-confirm?token={token}"
+    await asyncio.to_thread(lambda: resend.Emails.send({
+        "from": _settings.resend_from_email,
+        "to": [email],
+        "subject": "Confirme sua solicitação de exclusão de dados — Vigil Summit",
+        "text": (
+            f"Recebemos sua solicitação de exclusão de dados do Vigil Summit.\n\n"
+            f"Para confirmar, clique no link abaixo (válido por 24 horas):\n\n"
+            f"{confirm_url}\n\n"
+            f"Se você não fez esta solicitação, ignore este email.\n\n"
+            f"Equipe Vigil.AI"
+        ),
+    }))
 
 
 def _require_api_key(api_key: str | None = Security(_api_key_header)) -> None:
@@ -75,26 +97,75 @@ def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
     return {"status": "marked_no_show"}
 
 
-@router.post("/deletion-request")
+@router.post("/deletion-request", status_code=202)
 @limiter.limit("5/minute")
-def deletion_request(request: Request, payload: dict):
+async def deletion_request(request: Request, payload: dict):
+    """Step 1: receives email, sends confirmation token. Does NOT anonymize yet."""
     sb = get_supabase()
-    email = payload.get("email", "")
+    email = (payload.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="email é obrigatório")
 
-    result = sb.table("leads").select("id").eq("email", email).execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Lead não encontrado")
+    result = await asyncio.to_thread(
+        lambda: sb.table("leads").select("id, email").eq("email", email).execute()
+    )
 
+    if result.data:
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        await asyncio.to_thread(lambda: sb.table("deletion_tokens").insert({
+            "email": email,
+            "token": token,
+            "expires_at": expires_at,
+        }).execute())
+        await send_deletion_email(email, token)
+
+    # Return 202 regardless — prevents email enumeration
+    return {"status": "confirmation_sent"}
+
+
+@router.get("/deletion-request/confirm")
+async def deletion_confirm(token: str):
+    """Step 2: validates token from email and executes anonymization."""
+    if not token:
+        raise HTTPException(status_code=400, detail="token é obrigatório")
+
+    sb = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Itera todos os registros: o mesmo email pode estar em múltiplos eventos (event_id universal).
-    # LGPD exige anonimização de TODOS os dados do titular, não apenas o primeiro registro encontrado.
+    token_row = await asyncio.to_thread(lambda: (
+        sb.table("deletion_tokens")
+        .select("*")
+        .eq("token", token)
+        .gt("expires_at", now)
+        .is_("used_at", "null")
+        .single()
+        .execute()
+        .data
+    ))
+    if not token_row:
+        raise HTTPException(status_code=404, detail="Token inválido ou expirado")
+
+    email = token_row["email"]
+
+    # Mark token as used BEFORE anonymizing (idempotent)
+    await asyncio.to_thread(lambda: (
+        sb.table("deletion_tokens")
+        .update({"used_at": now})
+        .eq("id", token_row["id"])
+        .execute()
+    ))
+
+    result = await asyncio.to_thread(
+        lambda: sb.table("leads").select("id").eq("email", email).execute()
+    )
+    if not result.data:
+        return {"status": "anonymized"}
+
+    anon_now = datetime.now(timezone.utc).isoformat()
     for row in result.data:
         lead_id = row["id"]
-
-        sb.table("leads").update({
+        await asyncio.to_thread(lambda lid=lead_id: sb.table("leads").update({
             "name": "ANONIMIZADO",
             "email": str(uuid.uuid4()),
             "phone": None,
@@ -104,26 +175,24 @@ def deletion_request(request: Request, payload: dict):
             "consent_ip": None,
             "whatsapp_consent_at": None,
             "stage": LeadStage.OPTED_OUT.value,
-            "deletion_req_at": now,
-        }).eq("id", lead_id).execute()
+            "deletion_req_at": anon_now,
+        }).eq("id", lid).execute())
 
-        sb.table("scheduled_jobs").update({"status": "SKIPPED"}).eq("lead_id", lead_id).eq("status", "PENDING").execute()
+        await asyncio.to_thread(lambda lid=lead_id: sb.table("scheduled_jobs").update(
+            {"status": "SKIPPED"}
+        ).eq("lead_id", lid).eq("status", "PENDING").execute())
 
-        # lead_enrichment: PII mais densa — UPDATE em vez de DELETE para preservar integridade referencial
-        sb.table("lead_enrichment").update({
-            "real_role": None,
-            "company": None,
-            "sector": None,
-            "linkedin_url": None,
-            "security_signals": None,
-            "enrichment_summary": None,
-        }).eq("lead_id", lead_id).execute()
+        await asyncio.to_thread(lambda lid=lead_id: sb.table("lead_enrichment").update({
+            "real_role": None, "company": None, "sector": None,
+            "linkedin_url": None, "security_signals": None, "enrichment_summary": None,
+        }).eq("lead_id", lid).execute())
 
-        # messages: nula body e subject (PII direta); mantém metadados para métricas
-        sb.table("messages").update({"body": None, "subject": None}).eq("lead_id", lead_id).execute()
+        await asyncio.to_thread(lambda lid=lead_id: sb.table("messages").update(
+            {"body": None, "subject": None}
+        ).eq("lead_id", lid).execute())
 
-        # lead_memory: PII indireta nas mensagens do agente — deletar imediatamente
-        sb.table("lead_memory").delete().eq("lead_id", lead_id).execute()
+        await asyncio.to_thread(lambda lid=lead_id: sb.table("lead_memory").delete(
+        ).eq("lead_id", lid).execute())
 
     return {"status": "anonymized"}
 
