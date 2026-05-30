@@ -143,10 +143,15 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def _issue_deletion_token(sb, email: str) -> None:
+async def _issue_deletion_token(email: str) -> None:
     """Inserts a hashed deletion token and sends the confirmation email.
-    Only called when the email exists — runs as a background task so the
-    response time is identical for existing and non-existing emails."""
+    Creates its own Supabase client instance — never shares the singleton across concurrent tasks."""
+    sb = get_supabase()
+    # Invalidate any previous unused tokens for this email
+    await asyncio.to_thread(lambda: sb.table("deletion_tokens").update(
+        {"used_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("email", email).is_("used_at", "null").execute())
+
     token = secrets.token_urlsafe(32)
     token_hash = _hash_token(token)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
@@ -175,7 +180,7 @@ async def deletion_request(request: Request, payload: dict, background_tasks: Ba
     if result.data:
         # Use BackgroundTasks so both branches (found/not-found) return at the same time,
         # eliminating the timing side-channel that would reveal email existence.
-        background_tasks.add_task(_issue_deletion_token, sb, email)
+        background_tasks.add_task(_issue_deletion_token, email)
 
     return {"status": "confirmation_sent"}
 
