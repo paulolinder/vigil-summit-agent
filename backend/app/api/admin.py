@@ -31,11 +31,12 @@ async def _ping_anthropic() -> str:
 async def _ping_resend() -> str:
     try:
         async with httpx.AsyncClient(timeout=5) as c:
+            # /emails returns 200 on any valid key (even with no emails sent yet)
             r = await c.get(
-                "https://api.resend.com/domains",
+                "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
             )
-            return "ok" if r.status_code == 200 else "error"
+            return "ok" if r.status_code in (200, 422) else "error"
     except Exception:
         return "error"
 
@@ -59,9 +60,10 @@ async def _ping_cal() -> str:
         return "warn"
     try:
         async with httpx.AsyncClient(timeout=5) as c:
+            # Cal.com v1 uses apiKey as query param, not Bearer header
             r = await c.get(
-                "https://api.cal.com/v1/event-types",
-                headers={"Authorization": f"Bearer {settings.cal_api_key}"},
+                "https://api.cal.com/v1/me",
+                params={"apiKey": settings.cal_api_key},
             )
             return "ok" if r.status_code == 200 else "error"
     except Exception:
