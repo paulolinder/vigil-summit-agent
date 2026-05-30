@@ -42,9 +42,7 @@ services:
     ports:
       - "3030:3000"
     environment:
-      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SESSION_SECRET=${SESSION_SECRET}
       - HOSTNAME=0.0.0.0
     depends_on:
       backend:
