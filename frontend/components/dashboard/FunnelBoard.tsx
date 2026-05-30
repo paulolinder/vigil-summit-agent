@@ -110,7 +110,7 @@ export default function FunnelBoard() {
         const ids = fetchedLeads.map(l => l.id)
         if (ids.length === 0) { setLoading(false); return }
 
-        // Try fetching with subject; fall back without it if the column doesn't exist (PGRST204)
+        // Try fetching with subject; fall back without it if the column doesn't exist (42703)
         const fetchMessages = async (): Promise<Message[]> => {
           try {
             const { data, error: msgErr } = await supabase
@@ -119,13 +119,13 @@ export default function FunnelBoard() {
               .in('lead_id', ids)
               .eq('direction', 'OUT')
               .order('sent_at', { ascending: false })
-            if (msgErr && msgErr.code !== 'PGRST204') throw msgErr
+            if (msgErr && msgErr.code !== '42703') throw msgErr
             if (!msgErr) return (data ?? []) as Message[]
-            // PGRST204: column doesn't exist — fall back
+            // 42703: column doesn't exist — fall back
             throw msgErr
           } catch (err: unknown) {
             const pgErr = err as { code?: string }
-            if (pgErr?.code !== 'PGRST204') throw err
+            if (pgErr?.code !== '42703') throw err
             const { data } = await supabase
               .from('messages')
               .select('lead_id, sent_at, opened_at, clicked_at')
@@ -168,7 +168,34 @@ export default function FunnelBoard() {
       .channel('leads-board')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, payload => {
         if (payload.eventType === 'INSERT') {
-          setLeads(prev => [...prev, payload.new as BaseLead])
+          const newLead = payload.new as BaseLead
+          setLeads(prev => [...prev, newLead])
+          // Fetch enrichment + messages for the new lead
+          Promise.all([
+            supabase
+              .from('lead_enrichment')
+              .select('lead_id, sector, company_size, is_decision_maker')
+              .eq('lead_id', newLead.id)
+              .maybeSingle(),
+            supabase
+              .from('messages')
+              .select('lead_id, sent_at, opened_at, clicked_at, subject')
+              .eq('lead_id', newLead.id)
+              .eq('direction', 'OUT')
+              .order('sent_at', { ascending: false }),
+          ]).then(([{ data: enrich }, { data: msgs }]) => {
+            if (enrich) {
+              setEnrichmentMap(prev => new Map(prev).set(newLead.id, enrich as LeadEnrichment))
+            }
+            if (msgs && msgs.length > 0) {
+              setMessageMap(prev => {
+                const next = new Map(prev)
+                next.set(newLead.id, msgs[0] as LastMessage)
+                return next
+              })
+              setAllMessages(prev => [...(msgs as Message[]), ...prev])
+            }
+          }).catch(() => {/* non-fatal: lead shows with no enrichment until next reload */})
         } else if (payload.eventType === 'UPDATE') {
           setLeads(prev =>
             prev.map(l => l.id === (payload.new as BaseLead).id ? (payload.new as BaseLead) : l)

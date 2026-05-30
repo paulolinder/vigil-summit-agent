@@ -62,7 +62,8 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
   return (
     <>
       <div
-        className="fixed inset-0 bg-navy-950/10 z-[200]"
+        className="fixed inset-0 z-[200]"
+        style={{ backgroundColor: 'rgba(15, 23, 42, 0.1)' }}
         onClick={onClose}
       />
       <div className="fixed top-0 right-0 w-[380px] h-screen bg-white border-l border-slate-200 z-[201] flex flex-col shadow-xl overflow-y-auto">

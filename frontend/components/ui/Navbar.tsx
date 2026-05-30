@@ -10,7 +10,7 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
       <div className={`max-w-screen-xl mx-auto px-8 flex items-center justify-between ${variant === 'dashboard' ? 'h-14' : 'h-16'}`}>
         <div className="flex items-center gap-3">
           <Link href="/" className="font-black text-lg tracking-wide text-slate-900">
-            VIGIL<span className="text-sky-700">.AI</span>
+            VIGIL<span className={variant === 'dashboard' ? 'text-navy-700' : 'text-sky-700'}>.AI</span>
           </Link>
           {variant === 'dashboard' && (
             <>
