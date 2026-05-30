@@ -220,7 +220,6 @@ SECTOR_CONTENT = {
 }
 
 async def send_email(lead: dict, template_key: str, custom_note: str = "", phase: str = "pre_event") -> dict:
-    # lazy: evita falha na importação quando RESEND_API_KEY não está no ambiente de teste
     resend.api_key = settings.resend_api_key
 
     enrichment = lead.get("lead_enrichment") or {}
@@ -232,11 +231,9 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
 
     template = TEMPLATES.get(template_key, TEMPLATES["welcome"])
 
-    # CORRIGIDO: name.split()[0] lançava IndexError se name fosse string vazia
     raw_name = lead.get("name") or "Prezado(a)"
     first_name = raw_name.split()[0] if raw_name.split() else "Prezado(a)"
 
-    # Escape curly braces in AI-generated text before str.format() to prevent KeyError/ValueError
     safe_custom_note = custom_note.replace("{", "{{").replace("}", "}}")
 
     ctx = {
@@ -258,6 +255,26 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
     subject = template["subject"].format(**ctx)
     body = template["body"].format(**ctx)
 
+    sb = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Step 1: Record intent BEFORE sending — if Resend call fails, we still have a trace.
+    # status='PENDING' means "we intend to send but haven't confirmed yet".
+    pending_row = await asyncio.to_thread(lambda: sb.table("messages").insert({
+        "lead_id": lead["id"],
+        "event_id": lead.get("event_id"),
+        "channel": "EMAIL",
+        "direction": "OUT",
+        "subject": subject,
+        "body": body,
+        "funnel_stage": lead.get("stage", "REGISTERED"),
+        "resend_id": None,
+        "status": "PENDING",
+        "sent_at": now,
+    }).execute())
+
+    message_id = pending_row.data[0]["id"]
+
     try:
         payload = {
             "from": settings.resend_from_email,
@@ -267,20 +284,16 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
         }
         response = await asyncio.to_thread(lambda: resend.Emails.send(payload))
 
-        sb = get_supabase()
-        row = {
-            "lead_id": lead["id"],
-            "event_id": lead.get("event_id"),
-            "channel": "EMAIL",
-            "direction": "OUT",
-            "subject": subject,
-            "body": body,
-            "funnel_stage": lead.get("stage", "REGISTERED"),
+        # Step 2: Update with resend_id and mark as SENT
+        await asyncio.to_thread(lambda: sb.table("messages").update({
             "resend_id": response.get("id"),
-            "sent_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await asyncio.to_thread(lambda: sb.table("messages").insert(row).execute())
+            "status": "SENT",
+        }).eq("id", message_id).execute())
 
         return response
     except Exception as e:
+        # Mark as FAILED so operators can detect and investigate
+        await asyncio.to_thread(lambda: sb.table("messages").update({
+            "status": "FAILED",
+        }).eq("id", message_id).execute())
         return {"error": str(e)}
