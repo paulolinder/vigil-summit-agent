@@ -16,6 +16,10 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT = 20
 const RATE_WINDOW_MS = 60_000
 
+const MAX_MESSAGES = 20
+const MAX_MESSAGE_LENGTH = 2000
+const ALLOWED_ROLES = new Set(['user', 'assistant'])
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now()
 
@@ -58,6 +62,34 @@ export async function POST(request: NextRequest) {
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: 'messages inválido' }, { status: 400 })
+  }
+
+  if (messages.length > MAX_MESSAGES) {
+    return NextResponse.json(
+      { error: `Máximo de ${MAX_MESSAGES} mensagens por requisição` },
+      { status: 400 }
+    )
+  }
+
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'object') {
+      return NextResponse.json({ error: 'Formato de mensagem inválido' }, { status: 400 })
+    }
+    if (!ALLOWED_ROLES.has(msg.role)) {
+      return NextResponse.json(
+        { error: `Role '${msg.role}' não permitido` },
+        { status: 400 }
+      )
+    }
+    if (typeof msg.content !== 'string') {
+      return NextResponse.json({ error: 'Conteúdo de mensagem deve ser string' }, { status: 400 })
+    }
+    if (msg.content.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        { error: `Mensagem excede ${MAX_MESSAGE_LENGTH} caracteres` },
+        { status: 400 }
+      )
+    }
   }
 
   if (messages[0]?.role !== 'user') {
