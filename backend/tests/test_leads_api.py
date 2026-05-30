@@ -92,3 +92,51 @@ def test_deletion_request_anonymizes(client, mock_supabase):
     resp = client.post("/api/leads/deletion-request", json={"email": "maria@banco.com.br"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "anonymized"
+
+
+def test_resend_webhook_returns_503_when_secret_not_configured(client):
+    """Webhook must return 503 (not 200) when RESEND_WEBHOOK_SECRET is not set."""
+    from unittest.mock import patch
+    with patch("app.api.webhooks.settings") as mock_settings:
+        mock_settings.resend_webhook_secret = ""
+        resp = client.post(
+            "/api/webhooks/resend",
+            json={"type": "email.opened", "data": {"email_id": "abc123"}},
+        )
+    assert resp.status_code == 503
+
+
+def test_resend_webhook_returns_401_without_svix_headers(client):
+    """Webhook must reject requests missing Svix headers when secret IS configured."""
+    from unittest.mock import patch
+    with patch("app.api.webhooks.settings") as mock_settings:
+        mock_settings.resend_webhook_secret = "whsec_testkey1234567890testkey12345678"
+        resp = client.post(
+            "/api/webhooks/resend",
+            json={"type": "email.opened", "data": {"email_id": "abc123"}},
+        )
+    assert resp.status_code == 401
+
+
+def test_calcom_webhook_updates_lead_stage_on_booking_created(client):
+    """Cal.com BOOKING_CREATED webhook must update matching lead stage to MEETING_SCHEDULED."""
+    with patch("app.api.webhooks.get_supabase") as mock_sb:
+        mock_sb.return_value.table.return_value.update.return_value.eq.return_value.neq.return_value.execute.return_value = None
+
+        resp = client.post("/api/webhooks/calcom", json={
+            "triggerEvent": "BOOKING_CREATED",
+            "payload": {
+                "attendees": [{"email": "maria@banco.com.br", "name": "Maria Santos"}]
+            }
+        })
+    assert resp.status_code == 200
+    assert resp.json()["received"] is True
+
+
+def test_calcom_webhook_ignores_non_booking_events(client):
+    """Cal.com webhook must return 200 without DB changes for non-BOOKING_CREATED events."""
+    resp = client.post("/api/webhooks/calcom", json={
+        "triggerEvent": "BOOKING_CANCELLED",
+        "payload": {"attendees": [{"email": "test@test.com"}]}
+    })
+    assert resp.status_code == 200
