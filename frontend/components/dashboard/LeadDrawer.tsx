@@ -3,31 +3,31 @@ import { useEffect, useState } from 'react'
 import type { RichLead, Message } from '@/lib/types'
 
 const STAGE_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  REGISTERED:        { label: 'Inscrito',        color: 'text-navy-700',   bg: 'bg-blue-50',    border: 'border-blue-200' },
-  ENRICHED:          { label: 'Enriquecido',     color: 'text-navy-700',   bg: 'bg-blue-50',    border: 'border-blue-200' },
-  CONFIRMED:         { label: 'Confirmado',      color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200' },
-  ATTENDED:          { label: 'Presente',        color: 'text-navy-700',   bg: 'bg-blue-50',    border: 'border-blue-200' },
-  NO_SHOW:           { label: 'No-show',         color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200' },
-  MEETING_SCHEDULED: { label: 'Reunião agend.',  color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200' },
-  CONVERTED:         { label: 'Convertido',      color: 'text-emerald-700',bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  REGISTERED:        { label: 'Inscrito',       color: 'text-brand-teal',  bg: 'bg-brand-teal/10',  border: 'border-brand-teal/30' },
+  ENRICHED:          { label: 'Enriquecido',    color: 'text-brand-teal',  bg: 'bg-brand-teal/10',  border: 'border-brand-teal/30' },
+  CONFIRMED:         { label: 'Confirmado',     color: 'text-brand-green', bg: 'bg-brand-green/10', border: 'border-brand-green/30' },
+  ATTENDED:          { label: 'Presente',       color: 'text-brand-teal',  bg: 'bg-brand-teal/10',  border: 'border-brand-teal/30' },
+  NO_SHOW:           { label: 'No-show',        color: 'text-red-500',     bg: 'bg-red-50',         border: 'border-red-200' },
+  MEETING_SCHEDULED: { label: 'Reunião agend.', color: 'text-[#6b7a00]',  bg: 'bg-brand-lime/20',  border: 'border-brand-lime/50' },
+  CONVERTED:         { label: 'Convertido',     color: 'text-brand-green', bg: 'bg-brand-green/10', border: 'border-brand-green/30' },
 }
 
 function getDrawerTags(lead: RichLead) {
   const tags: Array<{ label: string; cls: string }> = []
   const role = (lead.role ?? '').toLowerCase()
   if (/ciso|cto|ceo|coo|cfo|\bvp\b|diretor|director|chief/.test(role)) {
-    tags.push({ label: 'C-level', cls: 'bg-blue-50 text-blue-700' })
+    tags.push({ label: 'C-level', cls: 'bg-brand-teal/10 text-brand-teal' })
   }
   if (lead.enrichment?.is_decision_maker) {
-    tags.push({ label: 'decisor', cls: 'bg-amber-50 text-amber-700' })
+    tags.push({ label: 'decisor', cls: 'bg-brand-lime/20 text-[#6b7a00]' })
   }
   return tags
 }
 
 function msgBorderColor(msg: Message): string {
-  if (msg.clicked_at) return 'border-green-500'
-  if (msg.opened_at) return 'border-green-300'
-  return 'border-navy-700'
+  if (msg.clicked_at) return 'border-brand-green'
+  if (msg.opened_at) return 'border-brand-green/50'
+  return 'border-brand-teal'
 }
 
 function msgStatus(msg: Message): string {
@@ -97,8 +97,8 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
           >
             ✕
           </button>
-          <p className="font-extrabold text-[15px] text-navy-950">{lead.name ?? '—'}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">
+          <p className="font-extrabold text-[15px] text-brand-text">{lead.name ?? '—'}</p>
+          <p className="text-[11px] text-brand-muted mt-0.5">
             {[lead.role, lead.company, lead.enrichment?.company_size].filter(Boolean).join(' · ')}
           </p>
           {tags.length > 0 && (
@@ -118,21 +118,21 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
         </div>
 
         {/* Run Agent */}
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400 mb-2">
+        <div className="px-5 py-3 border-b border-brand-border bg-brand-bg">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-brand-muted mb-2">
             Ação do Agente
           </p>
           <button
             onClick={handleRunAgent}
             disabled={agentRunning}
-            className="w-full bg-navy-950 text-white text-[11px] font-bold py-2 rounded-md
-                       hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full bg-brand-navy text-white text-[11px] font-bold py-2 rounded-md
+                       hover:bg-brand-teal disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {agentRunning ? '⏳ Executando…' : '▶ Rodar Agente Agora'}
           </button>
           {agentResult && (
             <p className={`text-[10px] mt-1.5 text-center font-semibold ${
-              agentResult.ok ? 'text-green-600' : 'text-red-500'
+              agentResult.ok ? 'text-brand-green' : 'text-red-500'
             }`}>
               {agentResult.message}
             </p>
@@ -140,28 +140,28 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
         </div>
 
         {/* Enrichment grid */}
-        <div className="px-5 py-4 border-b border-slate-100">
-          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400 mb-3">
+        <div className="px-5 py-4 border-b border-brand-border">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-brand-muted mb-3">
             Perfil enriquecido
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] text-slate-400">Setor</p>
-              <p className="text-[11px] font-semibold text-navy-950">{lead.enrichment?.sector ?? '—'}</p>
+              <p className="text-[10px] text-brand-muted">Setor</p>
+              <p className="text-[11px] font-semibold text-brand-text">{lead.enrichment?.sector ?? '—'}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400">Porte da empresa</p>
-              <p className="text-[11px] font-semibold text-navy-950">{lead.enrichment?.company_size ?? '—'}</p>
+              <p className="text-[10px] text-brand-muted">Porte da empresa</p>
+              <p className="text-[11px] font-semibold text-brand-text">{lead.enrichment?.company_size ?? '—'}</p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400">Decisor</p>
-              <p className={`text-[11px] font-semibold ${lead.enrichment?.is_decision_maker ? 'text-green-600' : 'text-slate-400'}`}>
+              <p className="text-[10px] text-brand-muted">Decisor</p>
+              <p className={`text-[11px] font-semibold ${lead.enrichment?.is_decision_maker ? 'text-brand-green' : 'text-brand-muted'}`}>
                 {lead.enrichment?.is_decision_maker ? '✓ Confirmado' : 'Não identificado'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400">Sinal de segurança</p>
-              <p className={`text-[11px] font-semibold ${isSecurityRole ? 'text-green-600' : 'text-slate-400'}`}>
+              <p className="text-[10px] text-brand-muted">Sinal de segurança</p>
+              <p className={`text-[11px] font-semibold ${isSecurityRole ? 'text-brand-green' : 'text-brand-muted'}`}>
                 {isSecurityRole ? '✓ Cargo relevante' : 'Não detectado'}
               </p>
             </div>
@@ -170,24 +170,24 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
 
         {/* Message history */}
         <div className="px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400 mb-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-brand-muted mb-3">
             Histórico de mensagens
           </p>
           {sortedMessages.length === 0 ? (
-            <p className="text-xs text-slate-300 py-4 text-center">Nenhuma mensagem enviada ainda</p>
+            <p className="text-xs text-brand-border py-4 text-center">Nenhuma mensagem enviada ainda</p>
           ) : (
             <div className="flex flex-col gap-3">
               {sortedMessages.map((msg, i) => (
                 <div key={`${msg.sent_at}-${i}`} className={`border-l-2 pl-2.5 ${msgBorderColor(msg)}`}>
-                  <p className="text-[11px] font-bold text-navy-950">
+                  <p className="text-[11px] font-bold text-brand-text">
                     {msg.subject ?? 'Email enviado'}
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
+                  <p className="text-[10px] text-brand-muted mt-0.5">
                     {new Date(msg.sent_at).toLocaleDateString('pt-BR', {
                       day: '2-digit', month: 'short', year: 'numeric',
                     })}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{msgStatus(msg)}</p>
+                  <p className="text-[10px] text-brand-muted mt-0.5">{msgStatus(msg)}</p>
                 </div>
               ))}
             </div>

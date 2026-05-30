@@ -3,18 +3,18 @@ import { useState, useEffect, useCallback } from 'react'
 import type { EventConfig, ServiceStatus, JobRow } from '@/lib/types'
 
 const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
-  ok:       { cls: 'bg-green-50 text-green-700',  label: '✓ Ativo' },
-  warn:     { cls: 'bg-amber-50 text-amber-700',  label: '⚠ Não configurado' },
-  error:    { cls: 'bg-red-50 text-red-600',      label: '✗ Erro' },
-  checking: { cls: 'bg-slate-100 text-slate-500', label: '⏳ Verificando…' },
+  ok:       { cls: 'bg-brand-green/10 text-brand-green', label: '✓ Ativo' },
+  warn:     { cls: 'bg-brand-lime/20 text-[#6b7a00]',   label: '⚠ Não configurado' },
+  error:    { cls: 'bg-red-50 text-red-500',             label: '✗ Erro' },
+  checking: { cls: 'bg-brand-bg text-brand-muted',       label: '⏳ Verificando…' },
 }
 
 const JOB_STATUS_BADGE: Record<string, string> = {
-  DONE:    'bg-green-50 text-green-700',
-  PENDING: 'bg-blue-50 text-blue-700',
-  RUNNING: 'bg-amber-50 text-amber-700',
-  FAILED:  'bg-red-50 text-red-600',
-  SKIPPED: 'bg-slate-100 text-slate-500',
+  DONE:    'bg-brand-green/10 text-brand-green',
+  PENDING: 'bg-brand-teal/10 text-brand-teal',
+  RUNNING: 'bg-brand-lime/20 text-[#6b7a00]',
+  FAILED:  'bg-red-50 text-red-500',
+  SKIPPED: 'bg-brand-bg text-brand-muted',
 }
 
 export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
@@ -131,47 +131,47 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
 
       {/* ── Event Config ─────────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 mb-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-muted mb-3">
           Configuração do Evento
         </p>
-        <div className="bg-white border border-slate-200 border-t-[3px] border-t-navy-700 rounded-lg p-5">
+        <div className="bg-white border border-brand-border border-t-[3px] border-t-brand-teal rounded-lg p-5">
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5">Nome</label>
+              <label className="block text-[10px] font-semibold text-brand-muted mb-1.5">Nome</label>
               <input
                 type="text"
                 value={form.name ?? ''}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:border-navy-700"
+                className="w-full border border-brand-border rounded-[10px] px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-teal"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5">Data do evento</label>
+              <label className="block text-[10px] font-semibold text-brand-muted mb-1.5">Data do evento</label>
               <input
                 type="date"
                 value={form.event_date ?? ''}
                 onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))}
-                className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:border-navy-700"
+                className="w-full border border-brand-border rounded-[10px] px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-teal"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 mb-1.5">Capacidade máxima</label>
+              <label className="block text-[10px] font-semibold text-brand-muted mb-1.5">Capacidade máxima</label>
               <input
                 type="number"
                 value={form.capacity ?? 120}
                 onChange={e => setForm(f => ({ ...f, capacity: Number(e.target.value) }))}
-                className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:border-navy-700"
+                className="w-full border border-brand-border rounded-[10px] px-3 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-teal"
               />
             </div>
           </div>
           <div className="mb-4">
-            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+            <div className="flex justify-between text-[10px] text-brand-muted mb-1">
               <span>Vagas ocupadas: <strong>{totalLeads} de {capacity}</strong> ({pct}%)</span>
               <span>{capacity - totalLeads} vagas disponíveis</span>
             </div>
-            <div className="bg-slate-100 rounded-full h-1.5">
+            <div className="bg-brand-bg rounded-full h-1.5">
               <div
-                className="bg-navy-700 rounded-full h-full transition-all duration-500"
+                className="bg-brand-teal rounded-full h-full transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -180,16 +180,16 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-navy-950 text-white text-xs font-bold px-5 py-2 rounded-md hover:bg-navy-700 disabled:opacity-50 transition-colors"
+              className="bg-brand-navy text-white text-xs font-bold px-5 py-2 rounded-[10px] hover:bg-brand-teal disabled:opacity-50 transition-colors"
             >
               {saving ? 'Salvando…' : 'Salvar alterações'}
             </button>
             {saveMsg && (
-              <span className={`text-xs font-semibold ${saveMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>
+              <span className={`text-xs font-semibold ${saveMsg.startsWith('✓') ? 'text-brand-green' : 'text-red-500'}`}>
                 {saveMsg}
               </span>
             )}
-            <span className="text-[10px] text-slate-400 ml-1">
+            <span className="text-[10px] text-brand-muted ml-1">
               Atualiza a data usada pelo agente para calcular os timings da régua
             </span>
           </div>
@@ -198,22 +198,22 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
 
       {/* ── Service Status ───────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 mb-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-muted mb-3">
           Status das Integrações
         </p>
         <div className="grid grid-cols-3 gap-3 mb-3">
           {services.map(svc => {
             const badge = STATUS_BADGE[svc.status] ?? STATUS_BADGE.warn
             return (
-              <div key={svc.name} className="bg-white border border-slate-200 rounded-lg p-3">
+              <div key={svc.name} className="bg-white border border-brand-border rounded-[14px] p-3">
                 <div className="flex justify-between items-start mb-1.5">
-                  <span className="text-xs font-bold text-navy-950">{svc.name}</span>
+                  <span className="text-xs font-bold text-brand-text">{svc.name}</span>
                   <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
                     {badge.label}
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-500">{svc.role}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">{svc.detail}</p>
+                <p className="text-[10px] text-brand-muted">{svc.role}</p>
+                <p className="text-[10px] text-brand-muted mt-0.5">{svc.detail}</p>
               </div>
             )
           })}
@@ -221,7 +221,7 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
         <button
           onClick={handleCheckLive}
           disabled={checking}
-          className="border border-slate-200 bg-white text-xs font-semibold text-slate-500 px-4 py-2 rounded-md hover:border-navy-700 hover:text-navy-700 disabled:opacity-50 transition-colors"
+          className="border border-brand-border bg-white text-xs font-semibold text-brand-muted px-4 py-2 rounded-[10px] hover:border-brand-teal hover:text-brand-teal disabled:opacity-50 transition-colors"
         >
           {checking ? '⏳ Verificando conexões…' : '🔄 Verificar conexões agora'}
         </button>
@@ -229,25 +229,25 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
 
       {/* ── Jobs Queue ───────────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 mb-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-muted mb-3">
           Fila do Agente — Jobs Recentes
         </p>
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <div className="flex justify-between items-center px-4 py-3 border-b border-slate-100">
-            <span className="text-xs font-semibold text-navy-950">Últimos 20 jobs</span>
-            <span className="text-[10px] text-slate-400">Atualiza a cada 30s</span>
+        <div className="bg-white border border-brand-border rounded-lg overflow-hidden">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-brand-bg">
+            <span className="text-xs font-semibold text-brand-text">Últimos 20 jobs</span>
+            <span className="text-[10px] text-brand-muted">Atualiza a cada 30s</span>
           </div>
           {jobs.length === 0 ? (
-            <p className="text-xs text-slate-300 text-center py-8">Nenhum job encontrado</p>
+            <p className="text-xs text-brand-border text-center py-8">Nenhum job encontrado</p>
           ) : (
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Lead</th>
-                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Job</th>
-                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Agendado para</th>
-                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Status</th>
-                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Ação</th>
+                <tr className="bg-brand-bg border-b border-brand-bg">
+                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-brand-muted">Lead</th>
+                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-brand-muted">Job</th>
+                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-brand-muted">Agendado para</th>
+                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-brand-muted">Status</th>
+                  <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-brand-muted">Ação</th>
                 </tr>
               </thead>
               <tbody>
@@ -261,19 +261,19 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
                     hour: '2-digit', minute: '2-digit',
                   })
                   return (
-                    <tr key={job.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <tr key={job.id} className="border-b border-brand-bg last:border-0 hover:bg-brand-bg">
                       <td className="px-4 py-2.5">
-                        <div className="font-semibold text-navy-950 text-[11px]">{leadName}</div>
-                        {leadCompany && <div className="text-[10px] text-slate-400">{leadCompany}</div>}
+                        <div className="font-semibold text-brand-text text-[11px]">{leadName}</div>
+                        {leadCompany && <div className="text-[10px] text-brand-muted">{leadCompany}</div>}
                       </td>
                       <td className="px-4 py-2.5">
-                        <code className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">
+                        <code className="bg-brand-bg text-brand-muted px-1.5 py-0.5 rounded text-[10px]">
                           {job.job_type}
                         </code>
                       </td>
-                      <td className="px-4 py-2.5 text-[10px] text-slate-500">{runAt}</td>
+                      <td className="px-4 py-2.5 text-[10px] text-brand-muted">{runAt}</td>
                       <td className="px-4 py-2.5">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${JOB_STATUS_BADGE[job.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${JOB_STATUS_BADGE[job.status] ?? 'bg-brand-bg text-brand-muted'}`}>
                           {job.status}
                         </span>
                       </td>
@@ -282,12 +282,12 @@ export default function ConfigPanel({ totalLeads }: { totalLeads: number }) {
                           <button
                             onClick={() => handleRunJob(job.id)}
                             disabled={isRunning}
-                            className="border border-slate-200 text-[10px] font-semibold text-navy-700 px-2 py-1 rounded hover:border-navy-700 disabled:opacity-50 transition-colors"
+                            className="border border-brand-border text-[10px] font-semibold text-brand-teal px-2 py-1 rounded hover:border-brand-teal disabled:opacity-50 transition-colors"
                           >
                             {isRunning ? '⏳' : job.status === 'FAILED' ? '↻ Retry' : '▶ Rodar agora'}
                           </button>
                         ) : (
-                          <span className="text-[10px] text-slate-300">—</span>
+                          <span className="text-[10px] text-brand-border">—</span>
                         )}
                       </td>
                     </tr>
