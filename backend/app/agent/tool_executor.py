@@ -17,12 +17,23 @@ async def _db(fn):
 async def execute_tool(tool_name: str, tool_input: dict, lead_id: str) -> str:
     sb = get_supabase()
 
+    # Security: reject if LLM specified a different lead_id than the authoritative one
+    requested_lead_id = tool_input.get("lead_id")
+    if requested_lead_id and requested_lead_id != lead_id:
+        return (
+            f"[BLOQUEADO] Tentativa de agir sobre lead '{requested_lead_id}' "
+            f"no contexto do lead '{lead_id}'. Ignorado por segurança."
+        )
+
+    # Normalize: always use the authoritative lead_id
+    tool_input = {**tool_input, "lead_id": lead_id}
+
     if tool_name == "enrich_lead":
-        return await _enrich_lead(tool_input.get("lead_id", lead_id), sb)
+        return await _enrich_lead(lead_id, sb)
     if tool_name == "send_pre_event_msg":
         return await _send_pre_event_msg(tool_input, sb)
     if tool_name == "check_engagement":
-        return await _check_engagement(tool_input.get("lead_id", lead_id), sb)
+        return await _check_engagement(lead_id, sb)
     if tool_name == "send_whatsapp":
         return await _send_whatsapp(tool_input, sb)
     if tool_name == "send_followup":
@@ -185,10 +196,24 @@ async def _send_followup(tool_input: dict, sb) -> str:
 
 
 async def _update_lead_stage(tool_input: dict, sb) -> str:
+    from app.agent.state_machine import is_valid_transition
+
     lead_id = tool_input["lead_id"]
-    stage = tool_input["stage"]
-    await _db(lambda: sb.table("leads").update({"stage": stage}).eq("id", lead_id).execute())
-    return f"Stage atualizado para {stage}"
+    new_stage = tool_input["stage"]
+
+    current = await _db(
+        lambda: sb.table("leads").select("stage").eq("id", lead_id).single().execute().data
+    )
+    if not current:
+        return f"Lead {lead_id} não encontrado"
+
+    current_stage = current.get("stage", "REGISTERED")
+
+    if not is_valid_transition(current_stage, new_stage):
+        return f"Transição bloqueada: {current_stage} → {new_stage} não é válida. Nenhuma alteração feita."
+
+    await _db(lambda: sb.table("leads").update({"stage": new_stage}).eq("id", lead_id).execute())
+    return f"Stage atualizado: {current_stage} → {new_stage}"
 
 
 async def _schedule_job(tool_input: dict, sb) -> str:
@@ -219,8 +244,9 @@ async def _schedule_job(tool_input: dict, sb) -> str:
 
 async def _schedule_meeting(tool_input: dict, sb) -> str:
     lead_id = tool_input["lead_id"]
+    context_note = tool_input.get("context_note", "")
 
-    lead = await _db(lambda: sb.table("leads").select("name, email").eq("id", lead_id).single().execute().data)
+    lead = await _db(lambda: sb.table("leads").select("name, email, stage").eq("id", lead_id).single().execute().data)
     if not lead:
         return "Lead não encontrado"
 
@@ -244,8 +270,13 @@ async def _schedule_meeting(tool_input: dict, sb) -> str:
             f"?{urlencode({'name': lead['name'], 'email': lead['email']})}"
         )
 
-        await _db(lambda: sb.table("leads").update({"stage": "MEETING_SCHEDULED"}).eq("id", lead_id).execute())
+        # Stage is intentionally NOT updated here.
+        # MEETING_SCHEDULED is set only by /webhooks/calcom when the attendee
+        # completes a real booking in Cal.com.
 
-        return f"Link de agendamento gerado: {booking_link}"
+        return (
+            f"Link de agendamento gerado: {booking_link}. "
+            f"Stage permanece '{lead['stage']}' até confirmação real no Cal.com."
+        )
     except Exception as e:
         return f"Erro Cal.com: {e}"

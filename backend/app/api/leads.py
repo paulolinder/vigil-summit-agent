@@ -70,31 +70,55 @@ def create_lead(lead_data: LeadCreate, request: Request, background_tasks: Backg
 
 @router.post("/{lead_id}/checkin", dependencies=[Security(_require_api_key)])
 def checkin_lead(lead_id: str, background_tasks: BackgroundTasks):
+    from app.agent.state_machine import is_valid_transition
     sb = get_supabase()
+
     result = sb.table("leads").select("id, stage").eq("id", lead_id).single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    current_stage = result.data["stage"]
+
+    if current_stage == LeadStage.ATTENDED.value:
+        return {"status": "already_checked_in"}
+
+    if not is_valid_transition(current_stage, LeadStage.ATTENDED.value):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transição inválida: {current_stage} → ATTENDED"
+        )
 
     sb.table("leads").update({"stage": LeadStage.ATTENDED.value}).eq("id", lead_id).execute()
 
     from app.agent.orchestrator import run_agent
     background_tasks.add_task(run_agent, lead_id, "LEAD_ATTENDED")
-
     return {"status": "checked_in"}
 
 
 @router.post("/{lead_id}/no-show", dependencies=[Security(_require_api_key)])
 def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
+    from app.agent.state_machine import is_valid_transition
     sb = get_supabase()
-    result = sb.table("leads").select("id").eq("id", lead_id).single().execute()
+
+    result = sb.table("leads").select("id, stage").eq("id", lead_id).single().execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    current_stage = result.data["stage"]
+
+    if current_stage == LeadStage.NO_SHOW.value:
+        return {"status": "already_no_show"}
+
+    if not is_valid_transition(current_stage, LeadStage.NO_SHOW.value):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transição inválida: {current_stage} → NO_SHOW"
+        )
 
     sb.table("leads").update({"stage": LeadStage.NO_SHOW.value}).eq("id", lead_id).execute()
 
     from app.agent.orchestrator import run_agent
     background_tasks.add_task(run_agent, lead_id, "LEAD_NO_SHOW")
-
     return {"status": "marked_no_show"}
 
 
