@@ -41,12 +41,12 @@ function DeletionConfirmContent() {
   }, [token])
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 w-full max-w-md text-center">
-        <p className="font-black text-base tracking-wide text-slate-900 mb-1">
-          VIGIL<span className="text-sky-700">.AI</span>
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center px-4">
+      <div className="bg-white rounded-[20px] border border-slate-200 shadow-[0_16px_40px_rgba(15,42,52,0.08)] p-8 w-full max-w-md text-center">
+        <p className="font-black text-base tracking-wide text-brand-navy mb-1">
+          VIGIL<span className="text-brand-teal">.AI</span>
         </p>
-        <h1 className="font-playfair font-bold text-xl text-slate-900 mb-5">
+        <h1 className="font-bold text-xl text-brand-text mb-5">
           Exclusão de Dados
         </h1>
 
@@ -56,7 +56,7 @@ function DeletionConfirmContent() {
 
         {status === 'success' && (
           <div>
-            <p className="text-green-700 font-semibold mb-2">Dados excluídos com sucesso.</p>
+            <p className="text-brand-green font-semibold mb-2">Dados excluídos com sucesso.</p>
             <p className="text-slate-500 text-sm">
               Seus dados pessoais foram removidos do Vigil Summit. Você não receberá mais
               comunicações nossas.
@@ -70,7 +70,7 @@ function DeletionConfirmContent() {
             <p className="text-slate-500 text-sm">{errorMsg}</p>
             <p className="text-slate-400 text-xs mt-4">
               Precisa de ajuda?{' '}
-              <a href="mailto:privacidade@vigil.ai" className="underline text-sky-700">
+              <a href="mailto:privacidade@vigil.ai" className="underline text-brand-teal">
                 privacidade@vigil.ai
               </a>
             </p>
@@ -84,7 +84,7 @@ function DeletionConfirmContent() {
 export default function DeletionConfirmPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-brand-bg flex items-center justify-center">
         <p className="text-slate-500 text-sm">Carregando…</p>
       </div>
     }>
