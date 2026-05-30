@@ -50,7 +50,7 @@ function getSignal(lead: RichLead): { color: SignalColor; text: string } {
   return { color: 'amber', text: `Email enviado · ${date}` }
 }
 
-export default function LeadCard({ lead }: { lead: RichLead }) {
+export default function LeadCard({ lead, onClick }: { lead: RichLead; onClick?: () => void }) {
   const tags = getTags(lead)
   const signal = getSignal(lead)
   const parts = (lead.name ?? '').split(' ')
@@ -61,7 +61,10 @@ export default function LeadCard({ lead }: { lead: RichLead }) {
     .join(' · ')
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5 mb-1.5 cursor-pointer hover:border-sky-700 hover:bg-white hover:shadow-sm transition-all last:mb-0">
+    <div
+        onClick={onClick}
+        className="bg-slate-50 border border-slate-200 rounded-md p-2.5 mb-1.5 cursor-pointer hover:border-navy-700 hover:bg-white hover:shadow-sm transition-all last:mb-0"
+      >
       <p className="text-slate-900 text-xs font-bold mb-0.5 truncate">{shortName}</p>
       {roleLabel && (
         <p className="text-slate-500 text-[10px] mb-1.5 truncate">{roleLabel}</p>
