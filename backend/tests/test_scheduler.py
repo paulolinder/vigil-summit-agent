@@ -14,12 +14,16 @@ def _make_sb(job=None, lead_stage="ENRICHED", msgs=None):
     mock = MagicMock()
     mock.table.side_effect = get_table
 
-    # scheduled_jobs — fetch by id+status (double .eq chain)
+    # rpc — atomic claim: returns data=True by default (claim succeeds)
+    mock.rpc = MagicMock(
+        return_value=MagicMock(execute=MagicMock(return_value=MagicMock(data=True)))
+    )
+
+    # scheduled_jobs — fetch by id (single .eq chain after claim)
     tables["scheduled_jobs"] = MagicMock()
     (
         tables["scheduled_jobs"]
         .select.return_value
-        .eq.return_value
         .eq.return_value
         .single.return_value
         .execute.return_value
@@ -189,3 +193,37 @@ async def test_does_not_skip_when_email_not_opened_but_skip_if_opened_set():
         await check_and_run_job("job-001")
 
     mock_run_agent.assert_called_once()
+
+
+async def test_atomic_claim_prevents_double_execution():
+    """Two concurrent calls to check_and_run_job for same job must only execute once.
+    The second call should find status != PENDING (claim failed) and return without running agent."""
+    import asyncio
+    mock_sb = _make_sb(job=_JOB, lead_stage="ENRICHED")
+
+    # rpc().execute() returns data=True for first call (claim succeeded), False for second
+    call_count = {"n": 0}
+    def rpc_side_effect(fn_name, params):
+        call_count["n"] += 1
+        rpc_mock = MagicMock()
+        rpc_mock.execute.return_value.data = call_count["n"] == 1
+        return rpc_mock
+
+    mock_sb.rpc = MagicMock(side_effect=rpc_side_effect)
+
+    run_calls = []
+    async def fake_run_agent(lead_id, trigger):
+        run_calls.append((lead_id, trigger))
+        return "ok"
+
+    with patch("app.scheduler.jobs.get_supabase", return_value=mock_sb), \
+         patch("app.scheduler.jobs.run_agent", fake_run_agent):
+        from app.scheduler.jobs import check_and_run_job
+        # Simulate two concurrent calls
+        await asyncio.gather(
+            check_and_run_job("job-001"),
+            check_and_run_job("job-001"),
+        )
+
+    # Despite two concurrent calls, agent runs exactly once
+    assert len(run_calls) == 1, f"Expected 1 run, got {len(run_calls)}"
