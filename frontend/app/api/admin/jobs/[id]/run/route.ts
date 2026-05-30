@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -12,6 +14,10 @@ export async function POST(
   const backendUrl = process.env.BACKEND_API_URL
   const backendKey = process.env.BACKEND_API_KEY
   if (!backendUrl || !backendKey) return NextResponse.json({ error: 'Configuração ausente' }, { status: 500 })
+
+  // In this project, all authenticated users are operators (no public self-signup).
+  // The dashboard login is team-only. If multi-tenant auth is added, enforce role check here.
+  if (!UUID_RE.test(params.id)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
 
   const res = await fetch(`${backendUrl}/api/admin/jobs/${params.id}/run`, {
     method: 'POST',

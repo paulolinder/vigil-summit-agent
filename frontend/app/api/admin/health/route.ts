@@ -6,6 +6,8 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
+  // In this project, all authenticated users are operators (no public self-signup).
+  // The dashboard login is team-only. If multi-tenant auth is added, enforce role check here.
   const backendUrl = process.env.BACKEND_API_URL
   const backendKey = process.env.BACKEND_API_KEY
   if (!backendUrl || !backendKey) return NextResponse.json({ error: 'Configuração ausente' }, { status: 500 })
