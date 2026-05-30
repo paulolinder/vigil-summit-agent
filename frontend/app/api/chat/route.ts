@@ -1,11 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  throw new Error('ANTHROPIC_API_KEY não configurada')
+// Client initialized lazily inside the handler — ANTHROPIC_API_KEY is a
+// runtime env var and must not be read at module load time (build phase).
+function getClient(): Anthropic {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY não configurada')
+  }
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 }
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // Simple in-memory rate limiter: 20 requests per minute per IP.
 // For multi-instance deployments, replace with a Redis-backed store.
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const response = await client.messages.create({
+        const response = await getClient().messages.create({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 1024,
           stream: true,
