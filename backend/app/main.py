@@ -13,7 +13,19 @@ from app.api.events import router as events_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.scheduler.runner import start_scheduler, scheduler
+    from app.scheduler.cleanup import run_all_cleanups
+
     await start_scheduler()
+
+    scheduler.add_job(
+        run_all_cleanups,
+        "cron",
+        hour=3,
+        minute=0,
+        id="daily_cleanup",
+        replace_existing=True,
+    )
+
     yield
     scheduler.shutdown(wait=False)
 
