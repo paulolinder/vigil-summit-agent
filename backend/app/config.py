@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     cal_api_key: str = ""
     cal_event_type_id: str = ""
     api_key: str = ""  # Header X-API-Key para endpoints operacionais e de leitura
+    stale_job_threshold_hours: int = 2
     frontend_url: str = "http://localhost:3030"
     # Origens permitidas pelo CORS — separadas por vírgula em produção
     # Ex: CORS_ORIGINS=https://meuservidor.com,https://www.meuservidor.com

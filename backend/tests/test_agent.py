@@ -229,3 +229,14 @@ async def test_run_agent_heartbeat_cancelled_on_completion():
         await run_agent("lead-001", "TEST")
 
     assert len(heartbeat_cancelled) == 1, "Heartbeat task must be cancelled after agent finishes"
+
+
+async def test_execute_tool_rejects_mismatched_lead_id():
+    """Tool executor must refuse to act on a different lead than the authoritative one."""
+    from app.agent.tool_executor import execute_tool
+    result = await execute_tool(
+        "update_lead_stage",
+        {"lead_id": "DIFERENTE-UUID-9999", "stage": "OPTED_OUT"},
+        lead_id="lead-001"
+    )
+    assert "BLOQUEADO" in result or "bloqueado" in result.lower()
