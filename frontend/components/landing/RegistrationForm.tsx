@@ -69,7 +69,7 @@ export default function RegistrationForm() {
   if (status === 'success') {
     return (
       <div className="text-center py-8 space-y-2">
-        <p className="text-green-700 text-lg font-semibold">Inscrição confirmada ✓</p>
+        <p className="text-brand-green text-lg font-semibold">Inscrição confirmada ✓</p>
         <p className="text-slate-500 text-sm">Você receberá um e-mail de confirmação em breve.</p>
       </div>
     )
@@ -78,13 +78,13 @@ export default function RegistrationForm() {
   if (status === 'duplicate') {
     return (
       <div className="text-center py-8 space-y-2">
-        <p className="text-sky-700 text-lg font-semibold">Você já está inscrito ✓</p>
+        <p className="text-brand-teal text-lg font-semibold">Você já está inscrito ✓</p>
         <p className="text-slate-500 text-sm">Este e-mail já está cadastrado para o evento.</p>
       </div>
     )
   }
 
-  const inputClass = 'w-full bg-slate-50 border border-slate-200 rounded px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-700 transition-colors text-sm'
+  const inputClass = 'w-full bg-brand-bg border border-brand-border rounded-[10px] px-4 py-3 text-brand-text placeholder-brand-muted focus:outline-none focus:border-brand-teal transition-colors text-sm'
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -105,7 +105,7 @@ export default function RegistrationForm() {
 
       <label className="flex items-center gap-3 cursor-pointer">
         <input type="checkbox" checked={form.has_companion} onChange={set('has_companion')}
-          className="w-4 h-4 accent-sky-700 flex-shrink-0" />
+          className="w-4 h-4 accent-brand-teal flex-shrink-0" />
         <span className="text-slate-600 text-sm">Vou com acompanhante</span>
       </label>
 
@@ -116,7 +116,7 @@ export default function RegistrationForm() {
 
       <label className="flex items-start gap-3 cursor-pointer">
         <input required type="checkbox" checked={form.consent} onChange={set('consent')}
-          className="w-4 h-4 mt-0.5 accent-sky-700 flex-shrink-0" />
+          className="w-4 h-4 mt-0.5 accent-brand-teal flex-shrink-0" />
         <span className="text-slate-400 text-xs leading-relaxed">
           Concordo com o tratamento dos meus dados pessoais pela Vigil.AI para fins de inscrição no
           Vigil Summit, conforme a LGPD. *
@@ -125,7 +125,7 @@ export default function RegistrationForm() {
 
       <label className="flex items-start gap-3 cursor-pointer">
         <input type="checkbox" checked={form.whatsapp_consent} onChange={set('whatsapp_consent')}
-          className="w-4 h-4 mt-0.5 accent-sky-700 flex-shrink-0" />
+          className="w-4 h-4 mt-0.5 accent-brand-teal flex-shrink-0" />
         <span className="text-slate-400 text-xs leading-relaxed">
           Aceito receber comunicações sobre o evento via WhatsApp.
         </span>
@@ -134,7 +134,7 @@ export default function RegistrationForm() {
       {status === 'error' && <p className="text-red-600 text-sm">{errorMsg}</p>}
 
       {eventError && (
-        <p className="text-amber-600 text-sm">
+        <p className="text-[#6b7a00] text-sm">
           Não foi possível carregar o evento. Verifique sua conexão e recarregue a página.
         </p>
       )}
@@ -142,7 +142,7 @@ export default function RegistrationForm() {
       <button
         type="submit"
         disabled={status === 'loading' || !form.consent || !eventId}
-        className="w-full bg-slate-900 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded transition-colors text-sm"
+        className="w-full bg-brand-navy hover:bg-brand-teal disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-[10px] transition-colors text-sm"
       >
         {status === 'loading' ? 'Inscrevendo…' : 'Confirmar inscrição →'}
       </button>

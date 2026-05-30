@@ -108,7 +108,7 @@ export default function ChatbotWidget() {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-sky-700 transition-colors z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 bg-brand-navy text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-teal transition-colors z-50"
         aria-label={open ? 'Fechar chat' : 'Abrir chat'}
       >
         {open
@@ -119,19 +119,19 @@ export default function ChatbotWidget() {
 
       {open && (
         <div
-          className="fixed bottom-24 right-6 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 flex flex-col"
+          className="fixed bottom-24 right-6 w-80 bg-white rounded-2xl shadow-2xl border border-brand-border z-50 flex flex-col"
           style={{ height: '420px' }}
         >
-          <div className="px-4 py-3 border-b border-slate-200 bg-slate-900 rounded-t-2xl">
+          <div className="px-4 py-3 border-b border-brand-border bg-brand-navy rounded-t-2xl">
             <p className="text-white font-semibold text-sm">Assistente Vigil Summit</p>
-            <p className="text-slate-400 text-xs">Resposta imediata</p>
+            <p className="text-white/50 text-xs">Resposta imediata</p>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-xs px-3 py-2 rounded-xl text-sm ${
                   msg.role === 'user'
-                    ? 'bg-sky-700 text-white'
+                    ? 'bg-brand-teal text-white'
                     : 'bg-slate-100 text-slate-700'
                 }`}>
                   {msg.content || <span className="animate-pulse text-slate-400">…</span>}
@@ -140,18 +140,18 @@ export default function ChatbotWidget() {
             ))}
             <div ref={bottomRef} />
           </div>
-          <div className="p-3 border-t border-slate-200 flex gap-2">
+          <div className="p-3 border-t border-brand-border flex gap-2">
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
               placeholder="Digite sua dúvida…"
-              className="flex-1 bg-slate-50 text-slate-900 text-sm p-2 rounded border border-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-700"
+              className="flex-1 bg-brand-bg text-brand-text text-sm p-2 rounded-[8px] border border-brand-border placeholder-brand-muted focus:outline-none focus:border-brand-teal"
             />
             <button
               onClick={sendMessage}
               disabled={loading}
-              className="bg-slate-900 text-white px-3 py-2 rounded text-sm hover:bg-sky-700 disabled:opacity-50 transition-colors"
+              className="bg-brand-navy text-white px-3 py-2 rounded-[8px] text-sm hover:bg-brand-teal disabled:opacity-50 transition-colors"
             >
               →
             </button>
