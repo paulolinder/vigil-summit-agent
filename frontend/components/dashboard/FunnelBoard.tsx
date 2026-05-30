@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import LeadCard from './LeadCard'
 
@@ -60,7 +61,10 @@ export default function FunnelBoard({ apiKey }: { apiKey: string }) {
         }
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIPTION_ERROR') {
+        if (
+          status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
+          status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
+        ) {
           setError('Conexão Realtime perdida. Atualize a página para reconectar.')
         }
       })
