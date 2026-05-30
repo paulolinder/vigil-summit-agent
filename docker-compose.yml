@@ -34,7 +34,6 @@ services:
       args:
         # NEXT_PUBLIC_* são injetadas em build time no bundle JS
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY}
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
         # DASHBOARD_PASSWORD como build arg garante acesso no middleware Edge
