@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateSessionToken } from '@/lib/session'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const token = request.cookies.get('dashboard_auth')?.value
-  if (!token || !(await validateSessionToken(token))) {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 

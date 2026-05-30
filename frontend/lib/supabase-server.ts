@@ -10,9 +10,14 @@ export async function createSupabaseServerClient() {
       cookies: {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // Route Handler context may be read-only — ignored safely
+            // because the middleware handles session refresh
+          }
         },
       },
     }
