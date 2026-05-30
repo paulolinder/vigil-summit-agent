@@ -60,10 +60,10 @@ async def _ping_cal() -> str:
         return "warn"
     try:
         async with httpx.AsyncClient(timeout=5) as c:
-            # Cal.com v1 uses apiKey as query param, not Bearer header
+            # Cal.com v2 supports Bearer header — avoids key exposure in URL/logs
             r = await c.get(
-                "https://api.cal.com/v1/me",
-                params={"apiKey": settings.cal_api_key},
+                "https://api.cal.com/v2/me",
+                headers={"Authorization": f"Bearer {settings.cal_api_key}"},
             )
             return "ok" if r.status_code == 200 else "error"
     except Exception:
