@@ -54,7 +54,7 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
     label: lead.stage, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200',
   }
   const tags = getDrawerTags(lead)
-  const isSecurityRole = /ciso|cto|ceo|\bvp\b|diretor|chief/.test((lead.role ?? '').toLowerCase())
+  const isSecurityRole = tags.some(t => t.label === 'C-level')
   const sortedMessages = [...messages].sort(
     (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
   )
