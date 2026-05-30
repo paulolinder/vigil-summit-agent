@@ -3,8 +3,6 @@ export const dynamic = 'force-dynamic'
 import FunnelBoard from '@/components/dashboard/FunnelBoard'
 
 export default function DashboardPage() {
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY || ''
-
   return (
     <div className="min-h-screen bg-gray-950 p-6">
       <div className="max-w-screen-xl mx-auto">
@@ -19,7 +17,7 @@ export default function DashboardPage() {
             ← Landing page
           </a>
         </div>
-        <FunnelBoard apiKey={apiKey} />
+        <FunnelBoard />
       </div>
     </div>
   )

@@ -1,10 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+// frontend/lib/api.ts
+// IMPORTANT: No NEXT_PUBLIC_API_KEY here.
+// Authenticated calls go through server-side proxies at /api/leads/*
 
-const authHeaders = {
-  'Content-Type': 'application/json',
-  'X-API-Key': API_KEY,
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export async function createLead(data: {
   event_id: string
@@ -27,11 +25,14 @@ export async function createLead(data: {
   return res.json()
 }
 
-export async function getLeads(event_id?: string) {
-  const url = event_id
-    ? `${API_URL}/api/leads/?event_id=${encodeURIComponent(event_id)}`
-    : `${API_URL}/api/leads/`
-  const res = await fetch(url, { headers: authHeaders })
+// Goes to Next.js server proxy at /api/leads — never exposes backend key to browser
+export async function getLeads(event_id?: string, limit = 100, offset = 0) {
+  const url = new URL('/api/leads', window.location.origin)
+  if (event_id) url.searchParams.set('event_id', event_id)
+  url.searchParams.set('limit', String(limit))
+  url.searchParams.set('offset', String(offset))
+
+  const res = await fetch(url.toString(), { cache: 'no-store' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -43,10 +44,13 @@ export async function getEvents() {
 }
 
 export async function checkinLead(lead_id: string) {
-  const res = await fetch(`${API_URL}/api/leads/${lead_id}/checkin`, {
-    method: 'POST',
-    headers: authHeaders,
-  })
+  const res = await fetch(`/api/leads/${lead_id}/checkin`, { method: 'POST' })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function markNoShow(lead_id: string) {
+  const res = await fetch(`/api/leads/${lead_id}/no-show`, { method: 'POST' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }

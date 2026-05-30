@@ -22,24 +22,21 @@ type Lead = {
   stage: string
 }
 
-export default function FunnelBoard({ apiKey }: { apiKey: string }) {
+export default function FunnelBoard() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
   useEffect(() => {
-    fetch(`${apiUrl}/api/leads/`, {
-      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
-    })
+    // Calls the Next.js server-side proxy at /api/leads — never exposes BACKEND_API_KEY to the browser
+    fetch('/api/leads', { cache: 'no-store' })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
       .then((data: Lead[]) => { setLeads(data); setLoading(false) })
       .catch(() => {
-        setError('Falha ao carregar leads. Verifique o backend e a API key.')
+        setError('Falha ao carregar leads. Verifique o backend.')
         setLoading(false)
       })
 
@@ -70,7 +67,7 @@ export default function FunnelBoard({ apiKey }: { apiKey: string }) {
       })
 
     return () => { supabase.removeChannel(channel) }
-  }, [apiKey, apiUrl])
+  }, [])
 
   const byStage = (stageKey: string) =>
     leads.filter(l => l.stage === stageKey)
