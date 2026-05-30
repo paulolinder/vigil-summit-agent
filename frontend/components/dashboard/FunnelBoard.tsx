@@ -11,13 +11,13 @@ import type { RichLead, LeadEnrichment, LastMessage, BaseLead, Message, Activity
 import ConfigPanel from './ConfigPanel'
 
 const STAGES = [
-  { key: 'REGISTERED',        label: 'Inscritos',        color: 'border-navy-700',    titleColor: 'text-navy-700'   },
-  { key: 'ENRICHED',          label: 'Enriquecidos',     color: 'border-navy-700',    titleColor: 'text-navy-700'   },
-  { key: 'CONFIRMED',         label: 'Confirmados',      color: 'border-green-500',   titleColor: 'text-green-600'  },
-  { key: 'ATTENDED',          label: 'Presentes',        color: 'border-navy-700',    titleColor: 'text-navy-700'   },
-  { key: 'NO_SHOW',           label: 'No-show',          color: 'border-red-500',     titleColor: 'text-red-600'    },
-  { key: 'MEETING_SCHEDULED', label: 'Reunião agendada', color: 'border-amber-500',   titleColor: 'text-amber-600'  },
-  { key: 'CONVERTED',         label: 'Convertidos',      color: 'border-emerald-500', titleColor: 'text-emerald-600'},
+  { key: 'REGISTERED',        label: 'Inscritos',        color: 'border-brand-teal',    titleColor: 'text-brand-teal'   },
+  { key: 'ENRICHED',          label: 'Enriquecidos',     color: 'border-brand-teal',    titleColor: 'text-brand-teal'   },
+  { key: 'CONFIRMED',         label: 'Confirmados',      color: 'border-brand-green',   titleColor: 'text-brand-green'  },
+  { key: 'ATTENDED',          label: 'Presentes',        color: 'border-brand-teal',    titleColor: 'text-brand-teal'   },
+  { key: 'NO_SHOW',           label: 'No-show',          color: 'border-red-400',       titleColor: 'text-red-400'      },
+  { key: 'MEETING_SCHEDULED', label: 'Reunião agendada', color: 'border-brand-lime',    titleColor: 'text-[#6b7a00]'    },
+  { key: 'CONVERTED',         label: 'Convertidos',      color: 'border-brand-green',   titleColor: 'text-brand-green'  },
 ] as const
 
 function buildRichLeads(
@@ -289,12 +289,12 @@ export default function FunnelBoard() {
     computeKpis(leads, allMessages)
   const metaDiff = confirmRate - 70
   const metaText = metaDiff >= 0 ? `${metaDiff}% acima da meta` : `${Math.abs(metaDiff)}% abaixo da meta`
-  const metaColor = metaDiff >= 0 ? 'text-green-600' : 'text-red-600'
+  const metaColor = metaDiff >= 0 ? 'text-brand-green' : 'text-red-400'
 
   return (
     <div>
       {/* KPI STRIP */}
-      <div className="bg-white border-b border-slate-200 px-8 py-5 grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="bg-brand-navy px-8 py-5 grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
             label: 'Total inscritos',
@@ -302,8 +302,7 @@ export default function FunnelBoard() {
             sub: 'de 120 vagas',
             meta: null as string | null,
             metaColor: '',
-            accent: 'border-navy-700',
-            valueColor: 'text-navy-700',
+            valueColor: 'text-brand-teal',
           },
           {
             label: 'Taxa de confirmação',
@@ -311,39 +310,36 @@ export default function FunnelBoard() {
             sub: 'meta: acima de 70%',
             meta: metaText,
             metaColor,
-            accent: 'border-green-500',
-            valueColor: confirmRate >= 70 ? 'text-green-600' : 'text-red-600',
+            valueColor: confirmRate >= 70 ? 'text-brand-green' : 'text-red-400',
           },
           {
             label: 'Reuniões agendadas',
             value: String(meetings),
             sub: 'via Cal.com',
             meta: meetingsDeltaWeek > 0 ? `+${meetingsDeltaWeek} essa semana` : null,
-            metaColor: 'text-amber-600',
-            accent: 'border-amber-500',
-            valueColor: 'text-amber-600',
+            metaColor: 'text-brand-lime',
+            valueColor: 'text-brand-lime',
           },
           {
             label: 'No-show',
             value: String(noShow),
             sub: 'reengajamento ativo',
             meta: noShowEmailOpened > 0 ? `${noShowEmailOpened} com email aberto` : null,
-            metaColor: 'text-green-600',
-            accent: 'border-red-500',
-            valueColor: 'text-red-600',
+            metaColor: 'text-brand-green',
+            valueColor: 'text-red-400',
           },
         ].map(kpi => (
           <div
             key={kpi.label}
-            className={`bg-white border border-slate-200 [border-top-width:3px] ${kpi.accent} rounded-lg p-4`}
+            className="bg-white/[0.07] border border-white/[0.12] rounded-[12px] p-4"
           >
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] mb-2">
+            <p className="text-[10px] font-semibold text-white/50 uppercase tracking-[0.08em] mb-2">
               {kpi.label}
             </p>
-            <p className={`font-playfair font-black text-4xl leading-none ${kpi.valueColor}`}>
+            <p className={`font-extrabold text-4xl leading-none tracking-tight ${kpi.valueColor}`}>
               {kpi.value}
             </p>
-            <p className="text-slate-400 text-[11px] mt-1.5">{kpi.sub}</p>
+            <p className="text-white/40 text-[11px] mt-1.5">{kpi.sub}</p>
             {kpi.meta && (
               <p className={`text-[10px] font-semibold mt-0.5 ${kpi.metaColor}`}>{kpi.meta}</p>
             )}
@@ -352,13 +348,13 @@ export default function FunnelBoard() {
       </div>
 
       {/* TAB BAR */}
-      <div className="bg-white border-b border-slate-200 px-8 flex gap-0">
+      <div className="bg-brand-navy border-b border-white/10 px-8 flex gap-0">
         <button
           onClick={() => setActiveTab('funnel')}
           className={`py-3 px-5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
             activeTab === 'funnel'
-              ? 'border-navy-700 text-navy-700'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
+              ? 'border-brand-teal text-brand-teal'
+              : 'border-transparent text-white/40 hover:text-white/70'
           }`}
         >
           📊 Funil de Leads
@@ -367,8 +363,8 @@ export default function FunnelBoard() {
           onClick={() => setActiveTab('config')}
           className={`py-3 px-5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
             activeTab === 'config'
-              ? 'border-navy-700 text-navy-700'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
+              ? 'border-brand-teal text-brand-teal'
+              : 'border-transparent text-white/40 hover:text-white/70'
           }`}
         >
           ⚙ Configurações
@@ -400,12 +396,12 @@ export default function FunnelBoard() {
           <div className="px-8 pb-8">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="font-playfair font-extrabold text-xl text-slate-900">Funil de Leads</h2>
-                <p className="text-slate-400 text-xs mt-0.5">
+                <h2 className="font-extrabold text-xl text-brand-text">Funil de Leads</h2>
+                <p className="text-brand-muted text-xs mt-0.5">
                   Atualização em tempo real — {total} leads carregados
                 </p>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5 text-slate-500 text-xs font-semibold">
+              <div className="bg-white border border-brand-border rounded-[10px] px-3 py-1.5 text-brand-muted text-xs font-semibold">
                 📅 Vigil Summit · 15 Ago 2026
               </div>
             </div>
@@ -416,18 +412,18 @@ export default function FunnelBoard() {
                 return (
                   <div key={key} className="flex-shrink-0 w-[220px] flex flex-col">
                     <div
-                      className={`bg-white border border-b-0 border-slate-200 [border-top-width:3px] ${color} rounded-t-lg px-3 py-2 flex items-center justify-between`}
+                      className={`bg-white border border-b-0 border-brand-border [border-top-width:3px] ${color} rounded-t-[10px] px-3 py-2 flex items-center justify-between`}
                     >
                       <span className={`text-[10px] font-bold uppercase tracking-[0.08em] ${titleColor}`}>
                         {label}
                       </span>
-                      <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center">
+                      <span className="bg-brand-bg text-brand-muted text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[22px] text-center">
                         {stageLeads.length || '—'}
                       </span>
                     </div>
-                    <div className="bg-white border border-slate-200 rounded-b-lg p-2 flex-1 min-h-[100px]">
+                    <div className="bg-white border border-brand-border rounded-b-[10px] p-2 flex-1 min-h-[100px]">
                       {stageLeads.length === 0 ? (
-                        <p className="text-slate-200 text-xs text-center pt-6">
+                        <p className="text-brand-border text-xs text-center pt-6">
                           {key === 'ATTENDED' ? 'Dia do evento · 15 Ago' : '—'}
                         </p>
                       ) : (
