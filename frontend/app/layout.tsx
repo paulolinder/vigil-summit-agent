@@ -11,7 +11,7 @@ const inter = Inter({
 const playfair = Playfair_Display({
   subsets: ['latin'],
   variable: '--font-playfair',
-  weight: ['700', '800', '900'],
+  weight: ['700', '800', '900'], // display-only — headings and KPI numbers
   display: 'swap',
 })
 
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.variable} ${playfair.variable} font-sans bg-slate-100 text-slate-900 antialiased`}>
+      <body className={`${inter.variable} ${playfair.variable} bg-slate-100 text-slate-900 antialiased`}>
         {children}
       </body>
     </html>
