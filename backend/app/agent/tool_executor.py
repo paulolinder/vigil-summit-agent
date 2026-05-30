@@ -87,7 +87,14 @@ async def _enrich_lead(lead_id: str, sb) -> str:
         }
 
         await _db(lambda: sb.table("lead_enrichment").upsert(enrichment).execute())
-        await _db(lambda: sb.table("leads").update({"stage": "ENRICHED"}).eq("id", lead_id).execute())
+        # Only update stage if transition is valid — prevents regression from CONVERTED or ATTENDED
+        from app.agent.state_machine import is_valid_transition
+        stage_row = await _db(
+            lambda: sb.table("leads").select("stage").eq("id", lead_id).single().execute().data
+        )
+        current_stage = (stage_row or {}).get("stage", "REGISTERED")
+        if is_valid_transition(current_stage, "ENRICHED"):
+            await _db(lambda: sb.table("leads").update({"stage": "ENRICHED"}).eq("id", lead_id).execute())
 
         return f"Lead enriquecido: {enrichment['enrichment_summary']}"
     except Exception as e:
