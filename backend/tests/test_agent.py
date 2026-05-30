@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -13,6 +14,11 @@ def _make_sb(lead_data=None, lock_insert_raises=False):
 
     mock = MagicMock()
     mock.table.side_effect = get_table
+
+    # rpc — atomic lock acquisition succeeds by default
+    mock.rpc = MagicMock(
+        return_value=MagicMock(execute=MagicMock(return_value=MagicMock(data=True)))
+    )
 
     # agent_locks — delete (cleanup) always succeeds
     tables["agent_locks"] = MagicMock()
@@ -57,9 +63,13 @@ _LEAD = {
 
 
 async def test_run_agent_aborts_when_locked():
-    """Mutex: if lock INSERT fails, run_agent aborts silently instead of running twice."""
-    mock_sb = _make_sb(lock_insert_raises=True)
-    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb):
+    """Mutex: if acquire_lock RPC returns False, run_agent aborts silently instead of running twice."""
+    mock_sb = _make_sb(lock_insert_raises=False)  # lock_insert_raises no longer used
+    mock_sb.rpc = MagicMock(
+        return_value=MagicMock(execute=MagicMock(return_value=MagicMock(data=False)))
+    )
+    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb):
         from app.agent.orchestrator import run_agent
         result = await run_agent("lead-001", "TEST")
     assert "abortando" in result
@@ -67,7 +77,8 @@ async def test_run_agent_aborts_when_locked():
 
 async def test_run_agent_lead_not_found():
     mock_sb = _make_sb(lead_data=None)
-    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb):
+    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb):
         from app.agent.orchestrator import run_agent
         result = await run_agent("nonexistent", "TEST")
     assert "não encontrado" in result
@@ -89,6 +100,7 @@ async def test_run_agent_end_turn_single_iteration():
     mock_client.messages.create = AsyncMock(return_value=mock_response)
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
          patch("app.agent.orchestrator._get_client", return_value=mock_client), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="system")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()):
@@ -126,6 +138,7 @@ async def test_run_agent_tool_use_then_end_turn():
     mock_client.messages.create = AsyncMock(side_effect=[tool_response, end_response])
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
          patch("app.agent.orchestrator._get_client", return_value=mock_client), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="system")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()), \
@@ -153,6 +166,7 @@ async def test_run_agent_releases_lock_on_exception():
     mock_sb.table("agent_locks").delete.side_effect = lambda: track_delete()
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
          patch("app.agent.orchestrator._get_client", return_value=mock_client), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="system")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()):
@@ -162,3 +176,56 @@ async def test_run_agent_releases_lock_on_exception():
             await run_agent("lead-001", "TEST")
 
     assert len(deleted) >= 1, "finally block must call delete to release the agent lock"
+
+
+async def test_run_agent_aborts_when_lock_not_acquired():
+    """If acquire_agent_lock RPC returns False, agent aborts instead of running."""
+    mock_sb = _make_sb(lead_data=_LEAD)
+    mock_sb.rpc = MagicMock(
+        return_value=MagicMock(execute=MagicMock(return_value=MagicMock(data=False)))
+    )
+
+    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb):
+        from app.agent.orchestrator import run_agent
+        result = await run_agent("lead-001", "TEST")
+
+    assert "abortando" in result
+
+
+async def test_run_agent_heartbeat_cancelled_on_completion():
+    """Heartbeat task is cancelled when agent finishes normally."""
+    mock_sb = _make_sb(lead_data=_LEAD)
+    mock_sb.rpc = MagicMock(
+        return_value=MagicMock(execute=MagicMock(return_value=MagicMock(data=True)))
+    )
+
+    mock_block = MagicMock()
+    mock_block.type = "text"
+    mock_block.text = "Done."
+    mock_response = MagicMock()
+    mock_response.stop_reason = "end_turn"
+    mock_response.content = [mock_block]
+
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+    heartbeat_cancelled = []
+
+    async def fake_heartbeat(lead_id, stop_event):
+        try:
+            await asyncio.sleep(9999)
+        except asyncio.CancelledError:
+            heartbeat_cancelled.append(True)
+            raise
+
+    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
+         patch("app.agent.orchestrator._get_client", return_value=mock_client), \
+         patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="sys")), \
+         patch("app.agent.orchestrator.save_memory", new=AsyncMock()), \
+         patch("app.agent.orchestrator.heartbeat_loop", fake_heartbeat):
+        from app.agent.orchestrator import run_agent
+        await run_agent("lead-001", "TEST")
+
+    assert len(heartbeat_cancelled) == 1, "Heartbeat task must be cancelled after agent finishes"

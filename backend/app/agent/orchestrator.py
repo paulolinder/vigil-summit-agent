@@ -1,12 +1,14 @@
+# backend/app/agent/orchestrator.py
 import asyncio
 import anthropic
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from app.config import settings
 from app.agent.tools import TOOLS
 from app.agent.tool_executor import execute_tool
 from app.agent.prompts import build_system_prompt
 from app.agent.memory import save_memory
+from app.agent.lock_manager import acquire_lock, release_lock, heartbeat_loop
 from app.db.client import get_supabase
 
 _client: anthropic.AsyncAnthropic | None = None
@@ -20,24 +22,23 @@ def _get_client() -> anthropic.AsyncAnthropic:
 
 
 async def run_agent(lead_id: str, trigger: str) -> str:
-    sb = get_supabase()
-
-    # Mutex via Supabase: evita race condition entre background task (D+0) e APScheduler
-    # para o mesmo lead. INSERT falha com constraint violation se lock válido já existe.
-    now = datetime.now(timezone.utc)
-    expires_at = (now + timedelta(minutes=5)).isoformat()
-    try:
-        await asyncio.to_thread(lambda: sb.table("agent_locks").delete().eq("lead_id", lead_id).lt("expires_at", now.isoformat()).execute())
-        await asyncio.to_thread(lambda: sb.table("agent_locks").insert({
-            "lead_id": lead_id,
-            "locked_at": now.isoformat(),
-            "expires_at": expires_at,
-        }).execute())
-    except Exception:
+    acquired = await acquire_lock(lead_id)
+    if not acquired:
         return f"Agent já em execução para lead {lead_id} — abortando"
 
+    stop_heartbeat = asyncio.Event()
+    heartbeat_task = asyncio.create_task(heartbeat_loop(lead_id, stop_heartbeat))
+
     try:
-        lead = await asyncio.to_thread(lambda: sb.table("leads").select("*, lead_enrichment(*)").eq("id", lead_id).single().execute().data)
+        sb = get_supabase()
+        lead = await asyncio.to_thread(
+            lambda: sb.table("leads")
+            .select("*, lead_enrichment(*)")
+            .eq("id", lead_id)
+            .single()
+            .execute()
+            .data
+        )
         if not lead:
             return f"Lead {lead_id} não encontrado"
 
@@ -81,7 +82,6 @@ async def run_agent(lead_id: str, trigger: str) -> str:
 
             if response.stop_reason == "tool_use" and tool_uses:
                 messages.append({"role": "assistant", "content": response.content})
-
                 tool_results = []
                 for tool_use in tool_uses:
                     result = await execute_tool(tool_use.name, tool_use.input, lead_id)
@@ -90,7 +90,6 @@ async def run_agent(lead_id: str, trigger: str) -> str:
                         "tool_use_id": tool_use.id,
                         "content": result,
                     })
-
                 messages.append({"role": "user", "content": tool_results})
             else:
                 break
@@ -98,4 +97,10 @@ async def run_agent(lead_id: str, trigger: str) -> str:
         return f"Agente concluiu após {iteration} iterações."
 
     finally:
-        await asyncio.to_thread(lambda: sb.table("agent_locks").delete().eq("lead_id", lead_id).execute())
+        stop_heartbeat.set()
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        await release_lock(lead_id)
