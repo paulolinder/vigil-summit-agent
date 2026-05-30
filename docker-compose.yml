@@ -43,6 +43,8 @@ services:
       - "3030:3000"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BACKEND_API_URL=${BACKEND_API_URL}
+      - BACKEND_API_KEY=${BACKEND_API_KEY}
       - HOSTNAME=0.0.0.0
     depends_on:
       backend:
