@@ -6,7 +6,14 @@ const config: Config = {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  theme: { extend: {} },
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        playfair: ['var(--font-playfair)', 'Georgia', 'serif'],
+      },
+    },
+  },
   plugins: [],
 }
 export default config
