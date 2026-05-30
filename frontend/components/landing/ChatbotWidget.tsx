@@ -8,6 +8,15 @@ const WELCOME_MESSAGE: Message = {
   content: 'Olá! Posso ajudar com dúvidas sobre o Vigil Summit ou sua inscrição. O que você precisa saber?',
 }
 
+function ChatIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+    </svg>
+  )
+}
+
 export default function ChatbotWidget() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE])
@@ -17,8 +26,6 @@ export default function ChatbotWidget() {
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
-
-  // cancela stream pendente quando o widget desmonta
   useEffect(() => () => { abortRef.current?.abort() }, [])
 
   const sendMessage = async () => {
@@ -28,14 +35,11 @@ export default function ChatbotWidget() {
     setInput('')
     setLoading(true)
 
-    // A mensagem de boas-vindas é só UI — a Anthropic API exige que o array
-    // comece com role:'user', então filtramos a constante WELCOME_MESSAGE antes de enviar.
     const allMessages = [...messages, userMsg]
       .filter(m => m !== WELCOME_MESSAGE)
       .map(m => ({ role: m.role, content: m.content }))
 
     setMessages(prev => [...prev, { role: 'assistant', content: '' }])
-
     abortRef.current = new AbortController()
 
     try {
@@ -89,7 +93,6 @@ export default function ChatbotWidget() {
         }
       }
     } catch (err) {
-      // AbortError é esperado quando o widget fecha — não exibir mensagem de erro
       if (err instanceof Error && err.name !== 'AbortError') {
         setMessages(prev => [
           ...prev.slice(0, -1),
@@ -103,34 +106,53 @@ export default function ChatbotWidget() {
 
   return (
     <>
-      <button onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-purple-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-purple-700 transition-colors text-2xl z-50">
-        {open ? '✕' : '💬'}
+      <button
+        onClick={() => setOpen(!open)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-sky-700 transition-colors z-50"
+        aria-label={open ? 'Fechar chat' : 'Abrir chat'}
+      >
+        {open
+          ? <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          : <ChatIcon />
+        }
       </button>
 
       {open && (
-        <div className="fixed bottom-24 right-6 w-80 bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 z-50 flex flex-col" style={{ height: '420px' }}>
-          <div className="px-4 py-3 border-b border-gray-700">
+        <div
+          className="fixed bottom-24 right-6 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 flex flex-col"
+          style={{ height: '420px' }}
+        >
+          <div className="px-4 py-3 border-b border-slate-200 bg-slate-900 rounded-t-2xl">
             <p className="text-white font-semibold text-sm">Assistente Vigil Summit</p>
-            <p className="text-gray-400 text-xs">Resposta imediata</p>
+            <p className="text-slate-400 text-xs">Resposta imediata</p>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs px-3 py-2 rounded-xl text-sm ${msg.role === 'user' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-200'}`}>
-                  {msg.content || <span className="animate-pulse text-gray-400">...</span>}
+                <div className={`max-w-xs px-3 py-2 rounded-xl text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-sky-700 text-white'
+                    : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {msg.content || <span className="animate-pulse text-slate-400">…</span>}
                 </div>
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
-          <div className="p-3 border-t border-gray-700 flex gap-2">
-            <input value={input} onChange={e => setInput(e.target.value)}
+          <div className="p-3 border-t border-slate-200 flex gap-2">
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              placeholder="Digite sua dúvida..."
-              className="flex-1 bg-gray-800 text-white text-sm p-2 rounded-lg border border-gray-700 placeholder-gray-500" />
-            <button onClick={sendMessage} disabled={loading}
-              className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+              placeholder="Digite sua dúvida…"
+              className="flex-1 bg-slate-50 text-slate-900 text-sm p-2 rounded border border-slate-200 placeholder-slate-400 focus:outline-none focus:border-sky-700"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={loading}
+              className="bg-slate-900 text-white px-3 py-2 rounded text-sm hover:bg-sky-700 disabled:opacity-50 transition-colors"
+            >
               →
             </button>
           </div>

@@ -16,7 +16,6 @@ function DeletionConfirmContent() {
       setErrorMsg('Link inválido ou expirado.')
       return
     }
-
     fetch('/api/leads/deletion-request/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -42,20 +41,23 @@ function DeletionConfirmContent() {
   }, [token])
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800 w-full max-w-md text-center">
-        <h1 className="text-white text-xl font-semibold mb-4">
-          Exclusão de Dados — Vigil Summit
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 w-full max-w-md text-center">
+        <p className="font-black text-base tracking-wide text-slate-900 mb-1">
+          VIGIL<span className="text-sky-700">.AI</span>
+        </p>
+        <h1 className="font-playfair font-bold text-xl text-slate-900 mb-5">
+          Exclusão de Dados
         </h1>
 
         {status === 'loading' && (
-          <p className="text-gray-400 text-sm">Processando sua solicitação…</p>
+          <p className="text-slate-500 text-sm">Processando sua solicitação…</p>
         )}
 
         {status === 'success' && (
           <div>
-            <p className="text-green-400 font-medium mb-2">Dados excluídos com sucesso.</p>
-            <p className="text-gray-500 text-sm">
+            <p className="text-green-700 font-semibold mb-2">Dados excluídos com sucesso.</p>
+            <p className="text-slate-500 text-sm">
               Seus dados pessoais foram removidos do Vigil Summit. Você não receberá mais
               comunicações nossas.
             </p>
@@ -64,11 +66,11 @@ function DeletionConfirmContent() {
 
         {status === 'error' && (
           <div>
-            <p className="text-red-400 font-medium mb-2">Não foi possível processar.</p>
-            <p className="text-gray-500 text-sm">{errorMsg}</p>
-            <p className="text-gray-600 text-xs mt-4">
+            <p className="text-red-600 font-semibold mb-2">Não foi possível processar.</p>
+            <p className="text-slate-500 text-sm">{errorMsg}</p>
+            <p className="text-slate-400 text-xs mt-4">
               Precisa de ajuda?{' '}
-              <a href="mailto:privacidade@vigil.ai" className="underline">
+              <a href="mailto:privacidade@vigil.ai" className="underline text-sky-700">
                 privacidade@vigil.ai
               </a>
             </p>
@@ -82,8 +84,8 @@ function DeletionConfirmContent() {
 export default function DeletionConfirmPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-400 text-sm">Carregando…</p>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <p className="text-slate-500 text-sm">Carregando…</p>
       </div>
     }>
       <DeletionConfirmContent />
