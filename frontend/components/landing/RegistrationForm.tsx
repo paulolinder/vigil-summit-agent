@@ -70,7 +70,7 @@ export default function RegistrationForm() {
     return (
       <div className="text-center py-8 space-y-2">
         <p className="text-brand-green text-lg font-semibold">Inscrição confirmada ✓</p>
-        <p className="text-slate-500 text-sm">Você receberá um e-mail de confirmação em breve.</p>
+        <p className="text-brand-muted text-sm">Você receberá um e-mail de confirmação em breve.</p>
       </div>
     )
   }
@@ -79,7 +79,7 @@ export default function RegistrationForm() {
     return (
       <div className="text-center py-8 space-y-2">
         <p className="text-brand-teal text-lg font-semibold">Você já está inscrito ✓</p>
-        <p className="text-slate-500 text-sm">Este e-mail já está cadastrado para o evento.</p>
+        <p className="text-brand-muted text-sm">Este e-mail já está cadastrado para o evento.</p>
       </div>
     )
   }
@@ -106,7 +106,7 @@ export default function RegistrationForm() {
       <label className="flex items-center gap-3 cursor-pointer">
         <input type="checkbox" checked={form.has_companion} onChange={set('has_companion')}
           className="w-4 h-4 accent-brand-teal flex-shrink-0" />
-        <span className="text-slate-600 text-sm">Vou com acompanhante</span>
+        <span className="text-brand-muted text-sm">Vou com acompanhante</span>
       </label>
 
       {form.has_companion && (
@@ -117,7 +117,7 @@ export default function RegistrationForm() {
       <label className="flex items-start gap-3 cursor-pointer">
         <input required type="checkbox" checked={form.consent} onChange={set('consent')}
           className="w-4 h-4 mt-0.5 accent-brand-teal flex-shrink-0" />
-        <span className="text-slate-400 text-xs leading-relaxed">
+        <span className="text-brand-muted text-xs leading-relaxed">
           Concordo com o tratamento dos meus dados pessoais pela Vigil.AI para fins de inscrição no
           Vigil Summit, conforme a LGPD. *
         </span>
@@ -126,7 +126,7 @@ export default function RegistrationForm() {
       <label className="flex items-start gap-3 cursor-pointer">
         <input type="checkbox" checked={form.whatsapp_consent} onChange={set('whatsapp_consent')}
           className="w-4 h-4 mt-0.5 accent-brand-teal flex-shrink-0" />
-        <span className="text-slate-400 text-xs leading-relaxed">
+        <span className="text-brand-muted text-xs leading-relaxed">
           Aceito receber comunicações sobre o evento via WhatsApp.
         </span>
       </label>
