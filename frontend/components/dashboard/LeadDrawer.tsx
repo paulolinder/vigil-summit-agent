@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { RichLead, Message } from '@/lib/types'
 
 const STAGE_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -50,6 +50,27 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
+  const [agentRunning, setAgentRunning] = useState(false)
+  const [agentResult, setAgentResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  async function handleRunAgent() {
+    setAgentRunning(true)
+    setAgentResult(null)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/run-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'MANUAL_TRIGGER' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setAgentResult({ ok: true, message: 'Agente iniciado — aguarde o Realtime atualizar o lead' })
+    } catch {
+      setAgentResult({ ok: false, message: 'Falha ao iniciar o agente' })
+    } finally {
+      setAgentRunning(false)
+    }
+  }
+
   const stage = STAGE_STYLE[lead.stage] ?? {
     label: lead.stage, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200',
   }
@@ -94,6 +115,28 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
         {/* Stage bar */}
         <div className={`px-5 py-2 ${stage.bg} border-b ${stage.border} text-[10px] font-bold uppercase tracking-wide ${stage.color}`}>
           ● {stage.label}
+        </div>
+
+        {/* Run Agent */}
+        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400 mb-2">
+            Ação do Agente
+          </p>
+          <button
+            onClick={handleRunAgent}
+            disabled={agentRunning}
+            className="w-full bg-navy-950 text-white text-[11px] font-bold py-2 rounded-md
+                       hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {agentRunning ? '⏳ Executando…' : '▶ Rodar Agente Agora'}
+          </button>
+          {agentResult && (
+            <p className={`text-[10px] mt-1.5 text-center font-semibold ${
+              agentResult.ok ? 'text-green-600' : 'text-red-500'
+            }`}>
+              {agentResult.message}
+            </p>
+          )}
         </div>
 
         {/* Enrichment grid */}
