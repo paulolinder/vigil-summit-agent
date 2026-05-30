@@ -35,7 +35,7 @@ async def _ping_resend() -> str:
                 "https://api.resend.com/domains",
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
             )
-            return "ok" if r.status_code in (200, 404) else "error"
+            return "ok" if r.status_code == 200 else "error"
     except Exception:
         return "error"
 
@@ -63,7 +63,7 @@ async def _ping_cal() -> str:
                 "https://api.cal.com/v1/event-types",
                 headers={"Authorization": f"Bearer {settings.cal_api_key}"},
             )
-            return "ok" if r.status_code in (200, 401) else "error"
+            return "ok" if r.status_code == 200 else "error"
     except Exception:
         return "error"
 
