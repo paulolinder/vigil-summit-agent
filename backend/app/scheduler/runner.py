@@ -27,6 +27,27 @@ async def _reload_pending_jobs() -> None:
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
 
+    # Recovery: reset jobs stuck in RUNNING for more than 30 minutes (worker crash assumed)
+    stuck_cutoff = (now - timedelta(minutes=30)).isoformat()
+    stuck_running = await asyncio.to_thread(lambda: (
+        sb.table("scheduled_jobs")
+        .select("id")
+        .eq("status", "RUNNING")
+        .lt("started_at", stuck_cutoff)
+        .execute()
+    ))
+    for job in stuck_running.data:
+        job_id = job["id"]
+        await asyncio.to_thread(lambda jid=job_id: (
+            sb.table("scheduled_jobs")
+            .update({
+                "status": "PENDING",
+                "error": f"Recovered: stuck in RUNNING for >30min (worker crash assumed)",
+            })
+            .eq("id", jid)
+            .execute()
+        ))
+
     await asyncio.to_thread(
         lambda: sb.table("agent_locks").delete().lt("expires_at", now_iso).execute()
     )

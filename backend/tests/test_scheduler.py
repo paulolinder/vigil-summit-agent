@@ -227,3 +227,46 @@ async def test_atomic_claim_prevents_double_execution():
 
     # Despite two concurrent calls, agent runs exactly once
     assert len(run_calls) == 1, f"Expected 1 run, got {len(run_calls)}"
+
+
+async def test_reload_resets_stuck_running_jobs():
+    """Jobs in RUNNING for more than 30 minutes must be reset to PENDING."""
+    from datetime import datetime, timezone, timedelta
+
+    old_started_at = (datetime.now(timezone.utc) - timedelta(minutes=35)).isoformat()
+    stuck_job = {"id": "stuck-001"}
+
+    mock_sb = MagicMock()
+    update_calls = []
+
+    def make_table(name):
+        t = MagicMock()
+        if name == "scheduled_jobs":
+            # stuck RUNNING query
+            t.select.return_value.eq.return_value.lt.return_value.execute.return_value.data = [stuck_job]
+            # other queries (PENDING overdue, future) return empty
+            t.select.return_value.eq.return_value.lte.return_value.gte.return_value.execute.return_value.data = []
+            t.select.return_value.eq.return_value.gt.return_value.execute.return_value.data = []
+
+            def capture_update(data):
+                update_calls.append(data)
+                m = MagicMock()
+                m.eq.return_value.execute.return_value = None
+                return m
+            t.update.side_effect = capture_update
+        elif name == "agent_locks":
+            t.delete.return_value.lt.return_value.execute.return_value = None
+        return t
+
+    mock_sb.table.side_effect = make_table
+
+    with patch("app.scheduler.runner.get_supabase", return_value=mock_sb), \
+         patch("app.scheduler.runner.settings") as mock_settings, \
+         patch("app.scheduler.runner.scheduler") as mock_scheduler:
+        mock_settings.stale_job_threshold_hours = 2
+        mock_scheduler.get_job.return_value = None
+        from app.scheduler.runner import _reload_pending_jobs
+        await _reload_pending_jobs()
+
+    reset_calls = [c for c in update_calls if isinstance(c, dict) and c.get("status") == "PENDING"]
+    assert len(reset_calls) >= 1, f"Expected RUNNING→PENDING reset, got: {update_calls}"
