@@ -125,26 +125,44 @@ def test_resend_webhook_returns_401_without_svix_headers(client):
 
 
 def test_calcom_webhook_updates_lead_stage_on_booking_created(client):
-    """Cal.com BOOKING_CREATED webhook must update matching lead stage to MEETING_SCHEDULED."""
-    with patch("app.api.webhooks.get_supabase") as mock_sb:
-        mock_sb.return_value.table.return_value.update.return_value.eq.return_value.neq.return_value.execute.return_value = None
+    """Cal.com BOOKING_CREATED webhook sets MEETING_SCHEDULED when signature is valid."""
+    import hashlib, hmac as hmac_lib, json as jsonlib
+    secret = "test-valid-secret"
+    payload_dict = {
+        "triggerEvent": "BOOKING_CREATED",
+        "payload": {"attendees": [{"email": "maria@banco.com.br", "name": "Maria Santos"}]}
+    }
+    body = jsonlib.dumps(payload_dict, separators=(',', ':')).encode()
+    sig = "sha256=" + hmac_lib.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
-        resp = client.post("/api/webhooks/calcom", json={
-            "triggerEvent": "BOOKING_CREATED",
-            "payload": {
-                "attendees": [{"email": "maria@banco.com.br", "name": "Maria Santos"}]
-            }
-        })
+    with patch("app.api.webhooks.settings") as mock_settings, \
+         patch("app.api.webhooks.get_supabase") as mock_sb:
+        mock_settings.cal_webhook_secret = secret
+        mock_sb.return_value.table.return_value.update.return_value.eq.return_value.in_.return_value.execute.return_value = None
+        resp = client.post(
+            "/api/webhooks/calcom",
+            content=body,
+            headers={"content-type": "application/json", "X-Cal-Signature-256": sig},
+        )
     assert resp.status_code == 200
     assert resp.json()["received"] is True
 
 
 def test_calcom_webhook_ignores_non_booking_events(client):
-    """Cal.com webhook must return 200 without DB changes for non-BOOKING_CREATED events."""
-    resp = client.post("/api/webhooks/calcom", json={
-        "triggerEvent": "BOOKING_CANCELLED",
-        "payload": {"attendees": [{"email": "test@test.com"}]}
-    })
+    """Cal.com webhook returns 200 without DB changes for non-BOOKING_CREATED events."""
+    import hashlib, hmac as hmac_lib, json as jsonlib
+    secret = "test-valid-secret"
+    payload_dict = {"triggerEvent": "BOOKING_CANCELLED", "payload": {"attendees": [{"email": "test@test.com"}]}}
+    body = jsonlib.dumps(payload_dict, separators=(',', ':')).encode()
+    sig = "sha256=" + hmac_lib.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    with patch("app.api.webhooks.settings") as mock_settings:
+        mock_settings.cal_webhook_secret = secret
+        resp = client.post(
+            "/api/webhooks/calcom",
+            content=body,
+            headers={"content-type": "application/json", "X-Cal-Signature-256": sig},
+        )
     assert resp.status_code == 200
 
 
@@ -274,3 +292,49 @@ def test_list_leads_rejects_limit_over_500(client):
         headers={"X-API-Key": TEST_API_KEY}
     )
     assert resp.status_code == 400
+
+
+def test_calcom_webhook_returns_503_when_secret_not_configured(client):
+    """Webhook returns 503 when CAL_WEBHOOK_SECRET is not set."""
+    with patch("app.api.webhooks.settings") as mock_settings:
+        mock_settings.cal_webhook_secret = ""
+        resp = client.post("/api/webhooks/calcom", json={
+            "triggerEvent": "BOOKING_CREATED",
+            "payload": {"attendees": [{"email": "test@test.com"}]}
+        })
+    assert resp.status_code == 503
+
+
+def test_calcom_webhook_returns_401_without_signature(client):
+    """Webhook returns 401 when X-Cal-Signature-256 header is missing."""
+    with patch("app.api.webhooks.settings") as mock_settings:
+        mock_settings.cal_webhook_secret = "test-secret-for-calcom"
+        resp = client.post("/api/webhooks/calcom", json={
+            "triggerEvent": "BOOKING_CREATED",
+            "payload": {"attendees": [{"email": "test@test.com"}]}
+        })
+    assert resp.status_code == 401
+
+
+def test_calcom_webhook_accepts_valid_signature(client):
+    """Webhook accepts request with valid HMAC-SHA256 signature."""
+    import hashlib, hmac as hmac_lib, json as jsonlib
+    secret = "test-secret-for-calcom-valid"
+    payload_dict = {
+        "triggerEvent": "BOOKING_CREATED",
+        "payload": {"attendees": [{"email": "t@t.com"}]}
+    }
+    body = jsonlib.dumps(payload_dict, separators=(',', ':')).encode()
+    sig = "sha256=" + hmac_lib.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    with patch("app.api.webhooks.settings") as mock_settings, \
+         patch("app.api.webhooks.get_supabase") as mock_sb:
+        mock_settings.cal_webhook_secret = secret
+        mock_sb.return_value.table.return_value.update.return_value.eq.return_value.in_.return_value.execute.return_value = None
+        resp = client.post(
+            "/api/webhooks/calcom",
+            content=body,
+            headers={"content-type": "application/json", "X-Cal-Signature-256": sig},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["received"] is True

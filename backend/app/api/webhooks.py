@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import hmac as hmac_lib
 import json
 from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
@@ -67,9 +69,29 @@ async def resend_webhook(
 
 
 @router.post("/calcom")
-async def calcom_webhook(request: Request):
-    """Receives Cal.com booking events and sets MEETING_SCHEDULED on the lead."""
-    data = await request.json()
+async def calcom_webhook(
+    request: Request,
+    x_cal_signature: Optional[str] = Header(None, alias="X-Cal-Signature-256"),
+):
+    """Receives Cal.com booking events. Requires HMAC-SHA256 signing secret."""
+    if not settings.cal_webhook_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="CAL_WEBHOOK_SECRET não configurado — webhook desabilitado por segurança",
+        )
+
+    payload = await request.body()
+
+    expected_sig = "sha256=" + hmac_lib.new(
+        settings.cal_webhook_secret.encode(),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not x_cal_signature or not hmac_lib.compare_digest(x_cal_signature, expected_sig):
+        raise HTTPException(status_code=401, detail="Assinatura Cal.com inválida")
+
+    data = json.loads(payload)
     event_type = data.get("triggerEvent", "")
 
     if event_type != "BOOKING_CREATED":
@@ -83,11 +105,12 @@ async def calcom_webhook(request: Request):
         return {"received": True}
 
     sb = get_supabase()
+    # Only valid source stages for MEETING_SCHEDULED: ATTENDED or NO_SHOW
     await asyncio.to_thread(
         lambda: sb.table("leads")
         .update({"stage": "MEETING_SCHEDULED"})
         .eq("email", attendee_email)
-        .neq("stage", "OPTED_OUT")
+        .in_("stage", ["ATTENDED", "NO_SHOW"])
         .execute()
     )
 

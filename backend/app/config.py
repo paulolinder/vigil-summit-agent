@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     evolution_instance_name: str = "vigil"
     cal_api_key: str = ""
     cal_event_type_id: str = ""
+    cal_webhook_secret: str = ""
     api_key: str = ""  # Header X-API-Key para endpoints operacionais e de leitura
     stale_job_threshold_hours: int = 2
     frontend_url: str = "http://localhost:3030"
