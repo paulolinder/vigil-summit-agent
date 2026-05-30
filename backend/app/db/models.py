@@ -18,8 +18,8 @@ class LeadCreate(BaseModel):
     event_id: str
     name: str
     email: EmailStr
-    company: str
-    role: str
+    company: Optional[str] = None
+    role: Optional[str] = None
     phone: Optional[str] = None
     has_companion: bool = False
     companion_name: Optional[str] = None

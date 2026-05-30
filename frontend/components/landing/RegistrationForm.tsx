@@ -94,12 +94,6 @@ export default function RegistrationForm() {
       <input required type="email" value={form.email} onChange={set('email')}
         placeholder="E-mail corporativo *" className={inputClass} />
 
-      <input required value={form.company} onChange={set('company')}
-        placeholder="Empresa *" className={inputClass} />
-
-      <input required value={form.role} onChange={set('role')}
-        placeholder="Cargo *" className={inputClass} />
-
       <input value={form.phone} onChange={set('phone')}
         placeholder="Telefone (opcional)" className={inputClass} />
 
