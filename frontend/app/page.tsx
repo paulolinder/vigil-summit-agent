@@ -6,65 +6,65 @@ import ChatbotWidget from '@/components/landing/ChatbotWidget'
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-slate-100">
+    <main className="min-h-screen bg-brand-bg">
       <Navbar variant="landing" />
 
       {/* HERO */}
-      <section className="bg-white border-b border-slate-200">
+      <section className="bg-white border-b border-brand-border">
         <div className="max-w-screen-xl mx-auto px-8 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div>
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-2 h-2 bg-sky-700 rounded-full" />
-              <span className="text-sky-700 text-xs font-bold tracking-[0.15em] uppercase">
+              <div className="w-2 h-2 bg-brand-teal rounded-full" />
+              <span className="text-brand-teal text-xs font-bold tracking-[0.15em] uppercase">
                 São Paulo · 15 Ago 2026 · Presencial
               </span>
             </div>
-            <h1 className="font-playfair font-black text-5xl text-slate-900 leading-[1.1] tracking-tight mb-5">
+            <h1 className="font-extrabold text-5xl text-brand-text leading-[1.1] tracking-tight mb-5">
               Vigil Summit<br />
-              <span className="text-sky-700">Segurança para<br />a Era da IA</span>
+              <span className="text-brand-teal">Segurança para<br />a Era da IA</span>
             </h1>
-            <p className="text-slate-500 text-lg leading-relaxed mb-8 max-w-xl">
+            <p className="text-brand-muted text-lg leading-relaxed mb-8 max-w-xl">
               O encontro definitivo de CISOs, CTOs e líderes de segurança corporativa para discutir
               IA, Zero Trust e conformidade em 2026.
             </p>
             <div className="flex gap-3 mb-10">
               <a
                 href="#inscricao"
-                className="bg-slate-900 text-white font-bold text-sm px-7 py-3.5 rounded hover:bg-sky-700 transition-colors"
+                className="bg-brand-navy text-white font-bold text-sm px-7 py-3.5 rounded-[10px] hover:bg-brand-navy/90 transition-colors"
               >
                 Garantir minha vaga →
               </a>
               <a
                 href="#agenda"
-                className="border-2 border-slate-200 text-slate-500 font-semibold text-sm px-5 py-3.5 rounded hover:border-slate-400 transition-colors"
+                className="bg-brand-lime text-brand-navy font-bold text-sm px-5 py-3.5 rounded-[10px] hover:bg-brand-lime/90 transition-colors"
               >
                 Ver programação
               </a>
             </div>
-            <div className="flex gap-8 border-t border-slate-100 pt-8">
+            <div className="flex gap-8 border-t border-brand-border pt-8">
               {[
                 { num: '120', label: 'vagas exclusivas' },
                 { num: '8h', label: 'de conteúdo' },
                 { num: 'C-level', label: 'público-alvo' },
               ].map(({ num, label }) => (
                 <div key={label}>
-                  <div className="font-playfair font-black text-3xl text-slate-900 leading-none">{num}</div>
-                  <div className="text-slate-400 text-xs font-medium mt-1">{label}</div>
+                  <div className="font-extrabold text-3xl text-brand-text tracking-tight leading-none">{num}</div>
+                  <div className="text-brand-muted text-xs font-medium mt-1">{label}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div id="inscricao" className="bg-white rounded-xl border border-slate-200 p-8 shadow-md">
-            <h2 className="text-slate-900 text-lg font-extrabold mb-1">Garante sua vaga</h2>
-            <p className="text-slate-500 text-sm mb-5">Inscrições limitadas a 120 participantes.</p>
+          <div id="inscricao" className="bg-white rounded-[20px] border border-brand-border p-8 shadow-[0_16px_40px_rgba(15,42,52,0.08)]">
+            <h2 className="text-brand-text text-lg font-extrabold mb-1">Garante sua vaga</h2>
+            <p className="text-brand-muted text-sm mb-5">Inscrições limitadas a 120 participantes.</p>
             <RegistrationForm />
           </div>
         </div>
       </section>
 
       {/* TRILHAS */}
-      <section className="bg-slate-50 border-y border-slate-200 py-14" id="agenda">
+      <section className="bg-brand-bg border-y border-brand-border py-14" id="agenda">
         <div className="max-w-screen-xl mx-auto px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
@@ -86,11 +86,11 @@ export default function Home() {
             ].map(({ track, title, desc }) => (
               <div
                 key={track}
-                className="bg-white rounded-lg border border-slate-200 [border-top-width:3px] border-t-sky-700 p-6"
+                className="bg-white rounded-[16px] border border-brand-border border-t-[3px] border-t-brand-teal p-6"
               >
-                <p className="text-sky-700 text-xs font-bold tracking-[0.1em] uppercase mb-2">{track}</p>
-                <p className="text-slate-900 font-extrabold text-base mb-2">{title}</p>
-                <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+                <p className="text-brand-teal text-xs font-bold tracking-[0.1em] uppercase mb-2">{track}</p>
+                <p className="text-brand-text font-extrabold text-base mb-2">{title}</p>
+                <p className="text-brand-muted text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
@@ -101,13 +101,13 @@ export default function Home() {
       <section className="bg-white py-16">
         <div className="max-w-screen-xl mx-auto px-8">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-5 h-0.5 bg-sky-700" />
-            <span className="text-sky-700 text-xs font-bold tracking-[0.15em] uppercase">Para quem é</span>
+            <div className="w-5 h-0.5 bg-brand-teal" />
+            <span className="text-brand-teal text-xs font-bold tracking-[0.15em] uppercase">Para quem é</span>
           </div>
-          <h2 className="font-playfair font-black text-3xl text-slate-900 mb-3 tracking-tight">
+          <h2 className="font-extrabold text-3xl text-brand-text mb-3 tracking-tight">
             Feito para quem decide em segurança
           </h2>
-          <p className="text-slate-500 text-base leading-relaxed mb-8 max-w-xl">
+          <p className="text-brand-muted text-base leading-relaxed mb-8 max-w-xl">
             Evento exclusivo para executivos e gestores de empresas com mais de 200 funcionários.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -123,8 +123,8 @@ export default function Home() {
                 key={label}
                 className={`px-4 py-2 rounded-full text-sm font-semibold border-2 ${
                   highlight
-                    ? 'border-sky-700 text-sky-700 bg-sky-50'
-                    : 'border-slate-200 text-slate-600 bg-white'
+                    ? 'border-brand-teal text-brand-teal bg-brand-teal/10'
+                    : 'border-brand-border text-brand-muted bg-white'
                 }`}
               >
                 {label}
@@ -135,12 +135,12 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-slate-900 py-5 px-8">
+      <footer className="bg-brand-navy py-5 px-8">
         <div className="max-w-screen-xl mx-auto flex items-center justify-between">
-          <p className="text-slate-400 text-xs">
-            <span className="text-white font-semibold">Vigil Summit 2026</span> · São Paulo · Evento corporativo exclusivo
+          <p className="text-white/40 text-sm">
+            © 2026 Vigil.AI · Todos os direitos reservados
           </p>
-          <a href="#" className="text-sky-300 hover:text-sky-200 text-xs transition-colors">
+          <a href="/deletion-confirm" className="text-brand-teal text-sm hover:text-brand-teal/80 transition-colors">
             Política de privacidade
           </a>
         </div>
