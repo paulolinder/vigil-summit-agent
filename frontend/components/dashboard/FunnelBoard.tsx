@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import type { RichLead } from '@/lib/types'
 import LeadCard from './LeadCard'
 
 const STAGES = [
@@ -14,16 +15,8 @@ const STAGES = [
   { key: 'CONVERTED',         label: 'Convertidos',   color: 'border-emerald-500' },
 ] as const
 
-type Lead = {
-  id: string
-  name: string | null
-  role: string | null
-  company: string | null
-  stage: string
-}
-
 export default function FunnelBoard() {
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [leads, setLeads] = useState<RichLead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,8 +27,8 @@ export default function FunnelBoard() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then((response: { data: Lead[] } | Lead[]) => {
-        const leads = Array.isArray(response) ? response : (response as { data: Lead[] }).data ?? []
+      .then((response: { data: RichLead[] } | RichLead[]) => {
+        const leads = Array.isArray(response) ? response : (response as { data: RichLead[] }).data ?? []
         setLeads(leads)
         setLoading(false)
       })
@@ -51,10 +44,10 @@ export default function FunnelBoard() {
         { event: '*', schema: 'public', table: 'leads' },
         payload => {
           if (payload.eventType === 'INSERT') {
-            setLeads(prev => [...prev, payload.new as Lead])
+            setLeads(prev => [...prev, payload.new as RichLead])
           } else if (payload.eventType === 'UPDATE') {
             setLeads(prev =>
-              prev.map(l => l.id === (payload.new as Lead).id ? (payload.new as Lead) : l)
+              prev.map(l => l.id === (payload.new as RichLead).id ? (payload.new as RichLead) : l)
             )
           } else if (payload.eventType === 'DELETE') {
             setLeads(prev => prev.filter(l => l.id !== (payload.old as { id: string }).id))
