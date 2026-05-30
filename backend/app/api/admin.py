@@ -28,17 +28,23 @@ async def _ping_anthropic() -> str:
         return "error"
 
 
-async def _ping_resend() -> str:
+async def _ping_resend() -> tuple[str, str]:
+    """Returns (status, detail)."""
+    if not settings.resend_api_key:
+        return "warn", "RESEND_API_KEY ausente"
     try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            # Fetch a non-existent email ID — valid key → 404, invalid key → 401
+        async with httpx.AsyncClient(timeout=10) as c:
             r = await c.get(
-                "https://api.resend.com/emails/00000000-0000-0000-0000-000000000000",
+                "https://api.resend.com/domains",
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
             )
-            return "ok" if r.status_code != 401 else "error"
-    except Exception:
-        return "error"
+            if r.status_code == 401:
+                return "error", f"Chave inválida (HTTP {r.status_code})"
+            return "ok", settings.resend_from_email
+    except httpx.TimeoutException:
+        return "warn", "Timeout ao conectar (API pode estar lenta)"
+    except Exception as e:
+        return "error", f"Erro de conexão: {type(e).__name__}"
 
 
 async def _ping_apollo() -> str:
@@ -126,16 +132,17 @@ def _build_services_config_only() -> list[dict]:
 
 
 async def _build_services_live() -> list[dict]:
-    anthropic_s, resend_s, apollo_s, cal_s, evolution_s = await asyncio.gather(
+    anthropic_s, resend_result, apollo_s, cal_s, evolution_s = await asyncio.gather(
         _ping_anthropic(),
         _ping_resend(),
         _ping_apollo(),
         _ping_cal(),
         _ping_evolution(),
     )
+    resend_s, resend_detail = resend_result
     return [
         {"name": "Claude (Anthropic)", "role": "Orquestrador do agente", "status": anthropic_s, "detail": "claude-sonnet-4-6"},
-        {"name": "Resend", "role": "Envio de emails", "status": resend_s, "detail": settings.resend_from_email},
+        {"name": "Resend", "role": "Envio de emails", "status": resend_s, "detail": resend_detail},
         {"name": "Apollo.io", "role": "Enriquecimento de leads", "status": apollo_s, "detail": "people/match API"},
         {"name": "Cal.com", "role": "Agendamento de reuniões", "status": cal_s, "detail": f"event type {settings.cal_event_type_id}"},
         {"name": "Supabase", "role": "Banco de dados + Realtime", "status": "ok", "detail": "PostgreSQL · RLS ativo"},
