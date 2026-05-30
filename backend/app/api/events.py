@@ -25,3 +25,18 @@ def get_event(event_id: str):
         raise
     except Exception:
         raise HTTPException(status_code=404, detail="Evento não encontrado")
+
+
+@router.put("/{event_id}", dependencies=[Security(_require_api_key)])
+async def update_event(event_id: str, payload: dict):
+    allowed = {"name", "event_date", "max_capacity"}
+    update_data = {k: v for k, v in payload.items() if k in allowed and v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
+    sb = get_supabase()
+    result = await asyncio.to_thread(
+        lambda: sb.table("events").update(update_data).eq("id", event_id).execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Evento não encontrado")
+    return result.data[0]
