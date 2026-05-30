@@ -1,0 +1,15 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.pytest_cache/
+tests/
+*.md
+Dockerfile
+.dockerignore
+railway.json
+Procfile
+runtime.txt
+requirements-dev.txt
+scripts/

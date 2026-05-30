@@ -1,0 +1,251 @@
+import asyncio
+import json
+import httpx
+from datetime import datetime, timezone
+from urllib.parse import urlencode
+
+from app.db.client import get_supabase
+from app.config import settings
+from app.services.resend_service import send_email
+
+
+async def _db(fn):
+    """Run a synchronous Supabase call in the thread pool — avoids blocking the event loop."""
+    return await asyncio.to_thread(fn)
+
+
+async def execute_tool(tool_name: str, tool_input: dict, lead_id: str) -> str:
+    sb = get_supabase()
+
+    if tool_name == "enrich_lead":
+        return await _enrich_lead(tool_input.get("lead_id", lead_id), sb)
+    if tool_name == "send_pre_event_msg":
+        return await _send_pre_event_msg(tool_input, sb)
+    if tool_name == "check_engagement":
+        return await _check_engagement(tool_input.get("lead_id", lead_id), sb)
+    if tool_name == "send_whatsapp":
+        return await _send_whatsapp(tool_input, sb)
+    if tool_name == "send_followup":
+        return await _send_followup(tool_input, sb)
+    if tool_name == "update_lead_stage":
+        return await _update_lead_stage(tool_input, sb)
+    if tool_name == "schedule_job":
+        return await _schedule_job(tool_input, sb)
+    if tool_name == "schedule_meeting":
+        return await _schedule_meeting(tool_input, sb)
+    return f"Tool desconhecida: {tool_name}"
+
+
+async def _enrich_lead(lead_id: str, sb) -> str:
+    lead = await _db(lambda: sb.table("leads").select("email, name, company").eq("id", lead_id).single().execute().data)
+    if not lead:
+        return "Lead não encontrado"
+
+    if not settings.apollo_api_key:
+        return "Apollo.io não configurado (apollo_api_key ausente)"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.apollo.io/v1/people/match",
+                headers={"x-api-key": settings.apollo_api_key, "Content-Type": "application/json"},
+                json={"email": lead["email"], "organization_name": lead.get("company")},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        person = data.get("person") or {}
+        org = person.get("organization") or {}
+        seniority = person.get("seniority", "")
+        is_dm = seniority in {"director", "vp", "c_suite", "owner", "partner", "founder"}
+
+        enrichment = {
+            "lead_id": lead_id,
+            "real_role": person.get("title"),
+            "company": org.get("name") or lead.get("company"),
+            "sector": org.get("industry"),
+            "company_size": str(org.get("estimated_num_employees", "")),
+            "linkedin_url": person.get("linkedin_url"),
+            "is_decision_maker": is_dm,
+            "enrichment_summary": (
+                f"{person.get('title', 'profissional')} na {org.get('name', lead.get('company', ''))}. "
+                f"Setor: {org.get('industry', 'N/A')}. "
+                f"Tamanho: {org.get('estimated_num_employees', 'N/A')} funcionários."
+            ),
+            "source": "apollo",
+        }
+
+        await _db(lambda: sb.table("lead_enrichment").upsert(enrichment).execute())
+        await _db(lambda: sb.table("leads").update({"stage": "ENRICHED"}).eq("id", lead_id).execute())
+
+        return f"Lead enriquecido: {enrichment['enrichment_summary']}"
+    except Exception as e:
+        return f"Erro no enriquecimento: {e}"
+
+
+async def _send_pre_event_msg(tool_input: dict, sb) -> str:
+    lead_id = tool_input["lead_id"]
+    template = tool_input.get("template", "welcome")
+    custom_note = tool_input.get("custom_note", "")
+
+    lead = await _db(lambda: sb.table("leads").select("*, lead_enrichment(*)").eq("id", lead_id).single().execute().data)
+    if not lead:
+        return "Lead não encontrado"
+
+    enrichment = lead.get("lead_enrichment")
+    if isinstance(enrichment, list):
+        lead["lead_enrichment"] = enrichment[0] if enrichment else {}
+
+    result = await send_email(lead, template, custom_note, phase="pre_event")
+    if "error" in result:
+        return f"Erro ao enviar email: {result['error']}"
+    return f"Email '{template}' enviado. resend_id={result.get('id')}"
+
+
+async def _check_engagement(lead_id: str, sb) -> str:
+    msgs = await _db(lambda: (
+        sb.table("messages")
+        .select("opened_at, clicked_at, sent_at")
+        .eq("lead_id", lead_id)
+        .eq("direction", "OUT")
+        .eq("channel", "EMAIL")
+        .order("sent_at", desc=True)
+        .limit(1)
+        .execute()
+        .data
+    ))
+
+    if not msgs:
+        return json.dumps({"opened": False, "clicked": False, "last_message_at": None})
+
+    msg = msgs[0]
+    return json.dumps({
+        "opened": bool(msg.get("opened_at")),
+        "clicked": bool(msg.get("clicked_at")),
+        "last_message_at": msg.get("sent_at"),
+    })
+
+
+async def _send_whatsapp(tool_input: dict, sb) -> str:
+    lead_id = tool_input["lead_id"]
+    text = tool_input.get("text", "")
+
+    lead = await _db(lambda: sb.table("leads").select("phone, whatsapp_consent_at").eq("id", lead_id).single().execute().data)
+    if not lead:
+        return "Lead não encontrado"
+
+    if not lead.get("whatsapp_consent_at"):
+        return "Lead não optou por WhatsApp — mensagem não enviada"
+
+    if not lead.get("phone"):
+        return "Telefone não cadastrado — mensagem não enviada"
+
+    if not settings.evolution_api_url or not settings.evolution_api_key:
+        return "Evolution API não configurada"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{settings.evolution_api_url}/message/sendText/{settings.evolution_instance_name}",
+                headers={"apikey": settings.evolution_api_key},
+                json={"number": lead["phone"], "text": text},
+            )
+            resp.raise_for_status()
+
+        await _db(lambda: sb.table("messages").insert({
+            "lead_id": lead_id,
+            "channel": "WHATSAPP",
+            "direction": "OUT",
+            "body": text,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        }).execute())
+
+        return f"WhatsApp enviado para {lead['phone']}"
+    except Exception as e:
+        return f"Erro WhatsApp: {e}"
+
+
+async def _send_followup(tool_input: dict, sb) -> str:
+    lead_id = tool_input["lead_id"]
+    template = tool_input.get("template", "thank_you")
+    custom_note = tool_input.get("custom_note", "")
+
+    lead = await _db(lambda: sb.table("leads").select("*, lead_enrichment(*)").eq("id", lead_id).single().execute().data)
+    if not lead:
+        return "Lead não encontrado"
+
+    enrichment = lead.get("lead_enrichment")
+    if isinstance(enrichment, list):
+        lead["lead_enrichment"] = enrichment[0] if enrichment else {}
+
+    result = await send_email(lead, template, custom_note, phase="post_event")
+    if "error" in result:
+        return f"Erro ao enviar followup: {result['error']}"
+    return f"Followup '{template}' enviado. resend_id={result.get('id')}"
+
+
+async def _update_lead_stage(tool_input: dict, sb) -> str:
+    lead_id = tool_input["lead_id"]
+    stage = tool_input["stage"]
+    await _db(lambda: sb.table("leads").update({"stage": stage}).eq("id", lead_id).execute())
+    return f"Stage atualizado para {stage}"
+
+
+async def _schedule_job(tool_input: dict, sb) -> str:
+    from app.scheduler.runner import add_job_to_scheduler
+
+    lead_id = tool_input["lead_id"]
+    run_at_str = tool_input["run_at"]
+    run_at = datetime.fromisoformat(run_at_str.replace("Z", "+00:00"))
+
+    lead_row = await _db(lambda: sb.table("leads").select("event_id").eq("id", lead_id).single().execute().data)
+    event_id = (lead_row or {}).get("event_id")
+
+    job: dict = {
+        "lead_id": lead_id,
+        "job_type": tool_input["job_type"],
+        "run_at": run_at_str,
+        "condition": tool_input.get("condition", {}),
+        "status": "PENDING",
+        "event_id": event_id,
+    }
+
+    result = await _db(lambda: sb.table("scheduled_jobs").insert(job).execute())
+    job_id = result.data[0]["id"]
+    add_job_to_scheduler(job_id, run_at)
+
+    return f"Job agendado: id={job_id}, run_at={run_at_str}"
+
+
+async def _schedule_meeting(tool_input: dict, sb) -> str:
+    lead_id = tool_input["lead_id"]
+
+    lead = await _db(lambda: sb.table("leads").select("name, email").eq("id", lead_id).single().execute().data)
+    if not lead:
+        return "Lead não encontrado"
+
+    if not settings.cal_api_key or not settings.cal_event_type_id:
+        return "Cal.com não configurado (cal_api_key ou cal_event_type_id ausentes)"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"https://api.cal.com/v1/event-types/{settings.cal_event_type_id}",
+                headers={"Authorization": f"Bearer {settings.cal_api_key}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        event_type = data.get("event_type", {})
+        slug = event_type.get("slug", "demo-vigil")
+        username = (event_type.get("team") or {}).get("slug", "vigil")
+        booking_link = (
+            f"https://cal.com/{username}/{slug}"
+            f"?{urlencode({'name': lead['name'], 'email': lead['email']})}"
+        )
+
+        await _db(lambda: sb.table("leads").update({"stage": "MEETING_SCHEDULED"}).eq("id", lead_id).execute())
+
+        return f"Link de agendamento gerado: {booking_link}"
+    except Exception as e:
+        return f"Erro Cal.com: {e}"

@@ -1,0 +1,101 @@
+import asyncio
+import anthropic
+from datetime import datetime, timezone, timedelta
+
+from app.config import settings
+from app.agent.tools import TOOLS
+from app.agent.tool_executor import execute_tool
+from app.agent.prompts import build_system_prompt
+from app.agent.memory import save_memory
+from app.db.client import get_supabase
+
+_client: anthropic.AsyncAnthropic | None = None
+
+
+def _get_client() -> anthropic.AsyncAnthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return _client
+
+
+async def run_agent(lead_id: str, trigger: str) -> str:
+    sb = get_supabase()
+
+    # Mutex via Supabase: evita race condition entre background task (D+0) e APScheduler
+    # para o mesmo lead. INSERT falha com constraint violation se lock válido já existe.
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(minutes=5)).isoformat()
+    try:
+        await asyncio.to_thread(lambda: sb.table("agent_locks").delete().eq("lead_id", lead_id).lt("expires_at", now.isoformat()).execute())
+        await asyncio.to_thread(lambda: sb.table("agent_locks").insert({
+            "lead_id": lead_id,
+            "locked_at": now.isoformat(),
+            "expires_at": expires_at,
+        }).execute())
+    except Exception:
+        return f"Agent já em execução para lead {lead_id} — abortando"
+
+    try:
+        lead = await asyncio.to_thread(lambda: sb.table("leads").select("*, lead_enrichment(*)").eq("id", lead_id).single().execute().data)
+        if not lead:
+            return f"Lead {lead_id} não encontrado"
+
+        enrichment = lead.get("lead_enrichment")
+        if isinstance(enrichment, list):
+            lead["lead_enrichment"] = enrichment[0] if enrichment else {}
+
+        client = _get_client()
+        system = await build_system_prompt(lead, trigger)
+        messages = [{"role": "user", "content": f"Trigger recebido: {trigger}. Avalie o estado e tome a ação mais adequada."}]
+
+        await save_memory(lead_id, "user", f"Trigger: {trigger}")
+
+        max_iterations = 10
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
+            response = await client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                system=system,
+                tools=TOOLS,
+                messages=messages,
+            )
+
+            assistant_text = ""
+            tool_uses = []
+
+            for block in response.content:
+                if block.type == "text":
+                    assistant_text = block.text
+                elif block.type == "tool_use":
+                    tool_uses.append(block)
+
+            if assistant_text:
+                await save_memory(lead_id, "assistant", assistant_text, tool_uses or None)
+
+            if response.stop_reason == "end_turn":
+                break
+
+            if response.stop_reason == "tool_use" and tool_uses:
+                messages.append({"role": "assistant", "content": response.content})
+
+                tool_results = []
+                for tool_use in tool_uses:
+                    result = await execute_tool(tool_use.name, tool_use.input, lead_id)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use.id,
+                        "content": result,
+                    })
+
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                break
+
+        return f"Agente concluiu após {iteration} iterações."
+
+    finally:
+        await asyncio.to_thread(lambda: sb.table("agent_locks").delete().eq("lead_id", lead_id).execute())
