@@ -120,6 +120,28 @@ async def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
     return {"status": "marked_no_show" if outcome == "OK" else "already_no_show"}
 
 
+@router.post("/{lead_id}/run-agent", dependencies=[Security(_require_api_key)])
+async def run_agent_endpoint(
+    lead_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    trigger = payload.get("trigger", "MANUAL_TRIGGER")
+    sb = get_supabase()
+    lead = await asyncio.to_thread(
+        lambda: sb.table("leads").select("id").eq("id", lead_id).single().execute().data
+    )
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+    from app.agent.orchestrator import run_agent
+    background_tasks.add_task(run_agent, lead_id, trigger)
+    return {"status": "started", "lead_id": lead_id, "trigger": trigger}
+
+
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
