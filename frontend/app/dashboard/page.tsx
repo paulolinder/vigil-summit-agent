@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import FunnelBoard from '@/components/dashboard/FunnelBoard'
 
 export default function DashboardPage() {

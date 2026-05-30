@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import RegistrationForm from '@/components/landing/RegistrationForm'
 import ChatbotWidget from '@/components/landing/ChatbotWidget'
 
