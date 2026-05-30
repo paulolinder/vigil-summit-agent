@@ -128,8 +128,9 @@ Nenhuma mudança de backend é necessária (o backend já expõe `GET /api/event
    "✓ Salvo com sucesso", e recarregar mostra os valores persistidos. (Validação ao vivo com
    login de teste fornecido pelo usuário.)
 2. **Fix #2:** clicar "Speakers" e "Local" na navbar → scroll para as seções correspondentes.
-3. **Fix #3:** badge do hero e "vagas" refletem o evento do banco; alterar capacidade em
-   Configurações e salvar reflete no KPI do dashboard.
+3. **Fix #3:** após corrigir a data para 2026-08-15 em Configurações, o badge do hero e a
+   seção Local exibem "15 Ago 2026" e "vagas" reflete `capacity` (120) do banco; alterar a
+   capacidade em Configurações e salvar reflete no KPI do dashboard no próximo load.
 4. **Fix #4:** após setar a env var na Vercel e redeploy, enviar mensagem no chat → resposta
    em streaming, sem erro de chave.
 
