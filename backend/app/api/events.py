@@ -29,7 +29,7 @@ def get_event(event_id: str):
 
 @router.put("/{event_id}", dependencies=[Security(_require_api_key)])
 async def update_event(event_id: str, payload: dict):
-    allowed = {"name", "event_date", "max_capacity"}
+    allowed = {"name", "event_date", "capacity"}
     update_data = {k: v for k, v in payload.items() if k in allowed and v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")

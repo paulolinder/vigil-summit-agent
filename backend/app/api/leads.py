@@ -131,10 +131,15 @@ async def run_agent_endpoint(
     except Exception:
         payload = {}
     trigger = payload.get("trigger", "MANUAL_TRIGGER")
+    if not isinstance(trigger, str):
+        raise HTTPException(status_code=400, detail="trigger deve ser uma string")
     sb = get_supabase()
-    lead = await asyncio.to_thread(
-        lambda: sb.table("leads").select("id").eq("id", lead_id).single().execute().data
-    )
+    try:
+        lead = await asyncio.to_thread(
+            lambda: sb.table("leads").select("id").eq("id", lead_id).single().execute().data
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     from app.agent.orchestrator import run_agent
