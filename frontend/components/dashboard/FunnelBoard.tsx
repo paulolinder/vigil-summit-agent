@@ -34,7 +34,11 @@ export default function FunnelBoard() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then((data: Lead[]) => { setLeads(data); setLoading(false) })
+      .then((response: { data: Lead[] } | Lead[]) => {
+        const leads = Array.isArray(response) ? response : (response as { data: Lead[] }).data ?? []
+        setLeads(leads)
+        setLoading(false)
+      })
       .catch(() => {
         setError('Falha ao carregar leads. Verifique o backend.')
         setLoading(false)
