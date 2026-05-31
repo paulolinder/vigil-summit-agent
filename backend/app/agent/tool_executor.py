@@ -204,24 +204,35 @@ async def _send_followup(tool_input: dict, sb) -> str:
 
 
 async def _update_lead_stage(tool_input: dict, sb) -> str:
-    from app.agent.state_machine import is_valid_transition
+    from app.agent.state_machine import VALID_TRANSITIONS
 
     lead_id = tool_input["lead_id"]
     new_stage = tool_input["stage"]
 
-    current = await _db(
-        lambda: sb.table("leads").select("stage").eq("id", lead_id).single().execute().data
-    )
-    if not current:
+    if new_stage not in VALID_TRANSITIONS:
+        return f"Stage inválido: {new_stage}"
+
+    # Source stages from which new_stage is reachable, per the state machine.
+    valid_from = [s for s, targets in VALID_TRANSITIONS.items() if new_stage in targets]
+
+    # Authoritative DB-level CAS — never a plain UPDATE for stage changes (avoids the
+    # read-then-write race with checkin/no-show/webhook writers).
+    result = await _db(lambda: sb.rpc("atomic_transition_lead_stage", {
+        "p_lead_id": lead_id,
+        "p_target_stage": new_stage,
+        "p_valid_from_stages": valid_from,
+    }).execute())
+    outcome = result.data
+
+    if outcome == "OK":
+        return f"Stage atualizado para {new_stage}"
+    if outcome == "ALREADY_SET":
+        return f"Stage já estava em {new_stage}. Nenhuma alteração feita."
+    if outcome == "INVALID_TRANSITION":
+        return f"Transição bloqueada para {new_stage} (origem não permitida). Nenhuma alteração feita."
+    if outcome == "NOT_FOUND":
         return f"Lead {lead_id} não encontrado"
-
-    current_stage = current.get("stage", "REGISTERED")
-
-    if not is_valid_transition(current_stage, new_stage):
-        return f"Transição bloqueada: {current_stage} → {new_stage} não é válida. Nenhuma alteração feita."
-
-    await _db(lambda: sb.table("leads").update({"stage": new_stage}).eq("id", lead_id).execute())
-    return f"Stage atualizado: {current_stage} → {new_stage}"
+    return f"Resultado inesperado da transição: {outcome}"
 
 
 async def _schedule_job(tool_input: dict, sb) -> str:

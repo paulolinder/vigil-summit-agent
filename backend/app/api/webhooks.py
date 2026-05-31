@@ -105,13 +105,17 @@ async def calcom_webhook(
         return {"received": True}
 
     sb = get_supabase()
-    # Only valid source stages for MEETING_SCHEDULED: ATTENDED or NO_SHOW
-    await asyncio.to_thread(
-        lambda: sb.table("leads")
-        .update({"stage": "MEETING_SCHEDULED"})
-        .eq("email", attendee_email)
-        .in_("stage", ["ATTENDED", "NO_SHOW"])
-        .execute()
+    # One email may map to multiple leads (multiple events). Transition each via the
+    # authoritative CAS RPC (valid sources: ATTENDED/NO_SHOW) — never a plain UPDATE
+    # for stage changes.
+    rows = await asyncio.to_thread(
+        lambda: sb.table("leads").select("id").eq("email", attendee_email).execute().data
     )
+    for row in rows or []:
+        await asyncio.to_thread(lambda lid=row["id"]: sb.rpc("atomic_transition_lead_stage", {
+            "p_lead_id": lid,
+            "p_target_stage": "MEETING_SCHEDULED",
+            "p_valid_from_stages": ["ATTENDED", "NO_SHOW"],
+        }).execute())
 
     return {"received": True}

@@ -1,6 +1,7 @@
 import asyncio
 from fastapi import APIRouter, HTTPException, Security
 from app.db.client import get_supabase
+from app.db.models import EventUpdate
 from app.api.auth import require_api_key as _require_api_key
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -28,9 +29,8 @@ def get_event(event_id: str):
 
 
 @router.put("/{event_id}", dependencies=[Security(_require_api_key)])
-async def update_event(event_id: str, payload: dict):
-    allowed = {"name", "event_date", "capacity"}
-    update_data = {k: v for k, v in payload.items() if k in allowed and v is not None}
+async def update_event(event_id: str, payload: EventUpdate):
+    update_data = payload.model_dump(exclude_none=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
     sb = get_supabase()
