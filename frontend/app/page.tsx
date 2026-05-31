@@ -3,30 +3,10 @@ export const dynamic = 'force-dynamic'
 import Navbar from '@/components/ui/Navbar'
 import RegistrationForm from '@/components/landing/RegistrationForm'
 import ChatbotWidget from '@/components/landing/ChatbotWidget'
-import { formatEventDate } from '@/lib/format'
-
-type EventRow = { event_date?: string | null; capacity?: number | null }
-
-// Server-side fetch of the event so the hero/badge/sections reflect the DB (single source
-// of truth), not hardcoded values. Uses BACKEND_API_URL per the project's server-side pattern,
-// falling back to the public URL. The backend GET /api/events/ is public, so no key is needed.
-async function getEvent(): Promise<EventRow | null> {
-  const base = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL
-  if (!base) return null
-  try {
-    const res = await fetch(`${base}/api/events/`, { cache: 'no-store' })
-    if (!res.ok) return null
-    const events = await res.json()
-    return Array.isArray(events) && events.length > 0 ? events[0] : null
-  } catch {
-    return null
-  }
-}
+import { getEventServer } from '@/lib/event'
 
 export default async function Home() {
-  const event = await getEvent()
-  const capacity = event?.capacity ?? 120
-  const eventDateLabel = formatEventDate(event?.event_date) || '15 Ago 2026'
+  const { capacity, dateLabel: eventDateLabel } = await getEventServer()
   return (
     <main className="min-h-screen bg-brand-bg">
       <Navbar variant="landing" />

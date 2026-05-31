@@ -66,6 +66,6 @@ export type JobRow = {
 export type EventConfig = {
   id: string
   name: string
-  event_date: string
+  event_date: string | null
   capacity: number | null
 }
