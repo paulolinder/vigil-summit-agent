@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import LeadCard from './LeadCard'
 import FunnelChart from './FunnelChart'
@@ -110,124 +109,77 @@ export default function FunnelBoard() {
   const [activeTab, setActiveTab] = useState<'funnel' | 'config'>('funnel')
 
   useEffect(() => {
-    fetch('/api/leads', { cache: 'no-store' })
-      .then(r => {
+    // O dashboard lê TUDO via o proxy /api/leads (service_role no backend), que embute
+    // lead_enrichment + messages. A RLS só libera essas tabelas para service_role, então
+    // consultá-las direto do navegador retornaria vazio — por isso derivamos do proxy.
+    type ProxyLead = BaseLead & {
+      lead_enrichment?: LeadEnrichment[] | LeadEnrichment | null
+      messages?: Array<Message & { direction?: string | null }> | null
+    }
+
+    let cancelled = false
+
+    async function loadLeads() {
+      try {
+        const r = await fetch('/api/leads', { cache: 'no-store' })
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(async (response: { data: BaseLead[] } | BaseLead[]) => {
-        const fetchedLeads = Array.isArray(response)
+        const response: { data: ProxyLead[] } | ProxyLead[] = await r.json()
+        const fetched: ProxyLead[] = Array.isArray(response)
           ? response
-          : (response as { data: BaseLead[] }).data ?? []
-        setLeads(fetchedLeads)
+          : (response.data ?? [])
+        if (cancelled) return
 
-        const ids = fetchedLeads.map(l => l.id)
-        if (ids.length === 0) { setLoading(false); return }
+        const baseLeads: BaseLead[] = fetched.map(l => ({
+          id: l.id, name: l.name, role: l.role, company: l.company, stage: l.stage,
+        }))
 
-        // Try fetching with subject; fall back without it if the column doesn't exist (42703)
-        const fetchMessages = async (): Promise<Message[]> => {
-          try {
-            const { data, error: msgErr } = await supabase
-              .from('messages')
-              .select('lead_id, sent_at, opened_at, clicked_at, subject, channel, status')
-              .in('lead_id', ids)
-              .eq('direction', 'OUT')
-              .order('sent_at', { ascending: false })
-            if (msgErr && msgErr.code !== '42703') throw msgErr
-            if (!msgErr) return (data ?? []) as Message[]
-            // 42703: column doesn't exist — fall back
-            throw msgErr
-          } catch (err: unknown) {
-            const pgErr = err as { code?: string }
-            if (pgErr?.code !== '42703') throw err
-            const { data } = await supabase
-              .from('messages')
-              .select('lead_id, sent_at, opened_at, clicked_at, channel, status')
-              .in('lead_id', ids)
-              .eq('direction', 'OUT')
-              .order('sent_at', { ascending: false })
-            return ((data ?? []) as Omit<Message, 'subject'>[]).map(m => ({ ...m, subject: null }))
+        const enrichMap = new Map<string, LeadEnrichment>()
+        const msgs: Message[] = []
+        for (const l of fetched) {
+          const e = Array.isArray(l.lead_enrichment) ? l.lead_enrichment[0] : l.lead_enrichment
+          if (e) enrichMap.set(l.id, e as LeadEnrichment)
+          for (const m of (l.messages ?? [])) {
+            if (m.direction !== 'IN') msgs.push(m as Message)
           }
         }
+        msgs.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())
 
-        const [msgRows, { data: enrichRows }] = await Promise.all([
-          fetchMessages(),
-          supabase
-            .from('lead_enrichment')
-            .select('lead_id, sector, company_size, is_decision_maker')
-            .in('lead_id', ids),
-        ])
-
-        const newEnrichMap = new Map<string, LeadEnrichment>()
-        for (const row of (enrichRows ?? [])) {
-          newEnrichMap.set(row.lead_id, row as LeadEnrichment)
+        const msgMap = new Map<string, LastMessage>()
+        for (const m of msgs) {
+          if (!msgMap.has(m.lead_id)) msgMap.set(m.lead_id, m)
         }
-        setEnrichmentMap(newEnrichMap)
 
-        setAllMessages(msgRows)
-
-        const newMsgMap = new Map<string, LastMessage>()
-        for (const row of msgRows) {
-          if (!newMsgMap.has(row.lead_id)) newMsgMap.set(row.lead_id, row)
-        }
-        setMessageMap(newMsgMap)
+        setLeads(baseLeads)
+        setEnrichmentMap(enrichMap)
+        setAllMessages(msgs)
+        setMessageMap(msgMap)
+        setError(null)
         setLoading(false)
-      })
-      .catch(() => {
+      } catch {
+        if (cancelled) return
         setError('Falha ao carregar leads. Verifique o backend.')
         setLoading(false)
-      })
+      }
+    }
+
+    loadLeads()
+
+    // Sob RLS estrita o navegador não recebe os postgres_changes de leads, então um poll
+    // curto é o driver confiável da atualização; se o Realtime entregar, refrescamos também.
+    const poll = setInterval(loadLeads, 12000)
 
     const channel = supabase
       .channel('leads-board')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, payload => {
-        if (payload.eventType === 'INSERT') {
-          const newLead = payload.new as BaseLead
-          setLeads(prev => [...prev, newLead])
-          // Fetch enrichment + messages for the new lead
-          Promise.all([
-            supabase
-              .from('lead_enrichment')
-              .select('lead_id, sector, company_size, is_decision_maker')
-              .eq('lead_id', newLead.id)
-              .maybeSingle(),
-            supabase
-              .from('messages')
-              .select('lead_id, sent_at, opened_at, clicked_at, subject')
-              .eq('lead_id', newLead.id)
-              .eq('direction', 'OUT')
-              .order('sent_at', { ascending: false }),
-          ]).then(([{ data: enrich }, { data: msgs }]) => {
-            if (enrich) {
-              setEnrichmentMap(prev => new Map(prev).set(newLead.id, enrich as LeadEnrichment))
-            }
-            if (msgs && msgs.length > 0) {
-              setMessageMap(prev => {
-                const next = new Map(prev)
-                next.set(newLead.id, msgs[0] as LastMessage)
-                return next
-              })
-              setAllMessages(prev => [...(msgs as Message[]), ...prev])
-            }
-          }).catch(() => {/* non-fatal: lead shows with no enrichment until next reload */})
-        } else if (payload.eventType === 'UPDATE') {
-          setLeads(prev =>
-            prev.map(l => l.id === (payload.new as BaseLead).id ? (payload.new as BaseLead) : l)
-          )
-        } else if (payload.eventType === 'DELETE') {
-          setLeads(prev => prev.filter(l => l.id !== (payload.old as { id: string }).id))
-        }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        loadLeads()
       })
-      .subscribe(status => {
-        if (
-          status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
-          status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT
-        ) {
-          setError('Conexão em tempo real perdida. Atualize a página para reconectar.')
-        }
-      })
+      .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      cancelled = true
+      clearInterval(poll)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const richLeads = useMemo(

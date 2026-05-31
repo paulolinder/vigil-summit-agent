@@ -314,7 +314,13 @@ def list_leads(event_id: str | None = None, limit: int = 100, offset: int = 0):
     if limit < 1:
         raise HTTPException(status_code=400, detail="Parâmetro 'limit' mínimo é 1")
     sb = get_supabase()
-    query = sb.table("leads").select("*, lead_enrichment(*)")
+    # Embed enrichment + messages no MESMO response (service_role, sem expor PII ao navegador).
+    # O dashboard consome estes dados do proxy — nunca consulta lead_enrichment/messages
+    # direto do browser (a RLS só libera service_role nessas tabelas).
+    query = sb.table("leads").select(
+        "*, lead_enrichment(*), "
+        "messages(lead_id, sent_at, opened_at, clicked_at, subject, channel, status, direction)"
+    )
     if event_id:
         query = query.eq("event_id", event_id)
     result = query.range(offset, offset + limit - 1).execute()
