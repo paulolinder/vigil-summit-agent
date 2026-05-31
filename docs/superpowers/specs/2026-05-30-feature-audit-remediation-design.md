@@ -4,7 +4,7 @@
 **Origem:** Auditoria de produção (paulolinder.com.br) solicitada após o bug "Configurações → Salvar não salva".
 **Estado do deploy na auditoria:** `master` == `origin/master` em `b8d5631` (produção rodava exatamente este código).
 **Revisão:** code-review do spec realizado (feature-dev:code-reviewer). Achados válidos incorporados; ver "Achados do review".
-**Addendum:** ver "Implementation notes / addendum (2026-05-31)" no fim — registra o que o que foi de fato entregue divergiu deste design.
+**Addendum:** ver "Implementation notes / addendum (2026-05-31)" no fim — registra onde o que foi de fato entregue divergiu deste design.
 
 ---
 
@@ -116,8 +116,9 @@ string genérica por `'Assistente temporariamente indisponível.'`.
 |---|---|
 | `frontend/app/api/events/route.ts` | **Criar** (proxy GET autenticado) |
 | `frontend/lib/format.ts` | **Criar** (helper `formatEventDate` com timezone SP) |
-| `frontend/app/page.tsx` | Editar (seções Speakers/Local + data/capacidade) |
-| `frontend/components/dashboard/FunnelBoard.tsx` | Editar (3 locais de data/capacidade) |
+| `frontend/lib/event.ts` | **Criar** (helper compartilhado `getEventServer`/`getEventClient` — ver addendum §3) |
+| `frontend/app/page.tsx` | Editar (seções Speakers/Local + data/capacidade, via `lib/event.ts`) |
+| `frontend/components/dashboard/FunnelBoard.tsx` | Editar (3 locais de data/capacidade, via `lib/event.ts`) |
 | `frontend/components/landing/ChatbotWidget.tsx` | Editar (mensagem de erro mais clara) |
 | _Banco_ | Corrigir `events.event_date` para 2026-08-15 |
 
@@ -196,8 +197,9 @@ definição real do banco. Colunas reais: `scheduled_jobs.started_at`, `agent_lo
 ### 3. `frontend/lib/event.ts` (ausente da tabela "Arquivos afetados")
 
 O refactor `6ec0606` extraiu um helper compartilhado `frontend/lib/event.ts` com
-`getEventServer()` (landing/server, lê `BACKEND_API_URL`), `getEventClient()` (dashboard/client,
-lê `/api/events`), constantes `DEFAULT_CAPACITY`/`DEFAULT_EVENT_DATE_LABEL` e tipo `EventInfo`.
+`getEventServer()` (landing/server, lê `BACKEND_API_URL`, com fallback para `NEXT_PUBLIC_API_URL`),
+`getEventClient()` (dashboard/client, lê `/api/events`), constantes
+`DEFAULT_CAPACITY`/`DEFAULT_EVENT_DATE_LABEL` e tipo `EventInfo`.
 Substituiu o `getEvent()` inline que o design esboçava e eliminou os literais de fallback
 duplicados. `page.tsx` e `FunnelBoard.tsx` consomem esse helper. Também: `EventConfig.event_date`
 tipado como `string | null` (batia com o schema) e `console.warn` nos caminhos de fallback.
