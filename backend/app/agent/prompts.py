@@ -208,7 +208,12 @@ PASSO 3 — Agendar agenda personalizada
 PASSO 1 — Verificar engajamento
   Chame check_engagement().
 
-PASSO 2 — Decisão baseada em abertura:
+PASSO 2 — Confirmar presença por engajamento (clicked):
+  SE clicked=True: o lead CLICOU no pedido de confirmação anterior — isso É a confirmação
+  de presença. Chame update_lead_stage("CONFIRMED"). Isso destrava os emails de agenda
+  (T-3), logística (T-1) e lembrete (T-0), que só disparam para leads CONFIRMED.
+
+PASSO 3 — Decisão baseada em abertura:
   SE opened=True (abriu confirmação anterior):
     Envie send_pre_event_msg("{vip_or_warmup}") com custom_note sobre conteúdo relevante para o setor.
   SE opened=False (não abriu):

@@ -20,6 +20,15 @@ def test_normal_mode_uses_event_calendar_dates():
     assert "2026-08" in plan      # t14/t10/... derivados do evento (15 Ago 2026)
 
 
+def test_warmup_confirms_on_click():
+    """WARMUP_T10 deve instruir o agente a marcar CONFIRMED quando o lead clicou no
+    pedido de confirmação (o clique É a confirmação de presença)."""
+    plan = _build_regua("WARMUP_T10", None, "ENRICHED", False, False)
+    assert "CONFIRMED" in plan
+    assert "update_lead_stage" in plan
+    assert "clicked" in plan.lower() or "clicou" in plan.lower()
+
+
 async def test_system_prompt_includes_lead_id():
     """O lead_id autoritativo DEVE aparecer no prompt — senão o agente inventa um
     placeholder, a trava de segurança bloqueia o enrich e o funil trava em REGISTERED."""
