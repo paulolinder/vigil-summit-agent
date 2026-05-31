@@ -9,11 +9,15 @@ from app.agent.lock_manager import acquire_lock, release_lock, heartbeat_loop
 from app.llm.provider import get_adapter
 from app.db.client import get_supabase
 
+# Sentinela inequívoco para "lock já segurado por outra execução".
+# check_and_run_job trata isso como contenção (re-enfileira), não como falha.
+LOCK_BUSY = "LOCK_BUSY"
+
 
 async def run_agent(lead_id: str, trigger: str) -> str:
     acquired = await acquire_lock(lead_id)
     if not acquired:
-        return f"Agent já em execução para lead {lead_id} — abortando"
+        return LOCK_BUSY
 
     stop_heartbeat = asyncio.Event()
     heartbeat_task = asyncio.create_task(heartbeat_loop(lead_id, stop_heartbeat))

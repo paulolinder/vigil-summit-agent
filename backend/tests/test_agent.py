@@ -94,7 +94,8 @@ async def test_run_agent_aborts_when_locked():
          patch("app.agent.lock_manager.get_supabase", return_value=mock_sb):
         from app.agent.orchestrator import run_agent
         result = await run_agent("lead-001", "TEST")
-    assert "abortando" in result
+    from app.agent.orchestrator import LOCK_BUSY
+    assert result == LOCK_BUSY
 
 
 async def test_run_agent_lead_not_found():
@@ -189,7 +190,8 @@ async def test_run_agent_aborts_when_lock_not_acquired():
         from app.agent.orchestrator import run_agent
         result = await run_agent("lead-001", "TEST")
 
-    assert "abortando" in result
+    from app.agent.orchestrator import LOCK_BUSY
+    assert result == LOCK_BUSY
 
 
 async def test_run_agent_heartbeat_cancelled_on_completion():
