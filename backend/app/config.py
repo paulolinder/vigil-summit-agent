@@ -1,7 +1,11 @@
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 
 class Settings(BaseSettings):
-    anthropic_api_key: str
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    openai_agent_model: str = "gpt-4.1"
+    openai_chat_model: str = "gpt-4.1-mini"
     supabase_url: str
     supabase_key: str
     resend_api_key: str
@@ -18,9 +22,16 @@ class Settings(BaseSettings):
     stale_job_threshold_hours: int = 2
     frontend_url: str = "http://localhost:3030"
     # Origens permitidas pelo CORS — separadas por vírgula em produção
-    # Ex: CORS_ORIGINS=https://meuservidor.com,https://www.meuservidor.com
     cors_origins: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env"}
+
+    @model_validator(mode="after")
+    def _require_one_llm_key(self):
+        if not self.anthropic_api_key and not self.openai_api_key:
+            raise ValueError(
+                "Nenhum provedor de LLM configurado: defina ANTHROPIC_API_KEY ou OPENAI_API_KEY"
+            )
+        return self
 
 settings = Settings()
