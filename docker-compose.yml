@@ -6,8 +6,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Anthropic
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # LLM provider — set ONE no painel (OPENAI_API_KEY ou ANTHROPIC_API_KEY). Se ambos, Anthropic vence.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_AGENT_MODEL=${OPENAI_AGENT_MODEL:-gpt-4.1}
       # Supabase
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
@@ -39,7 +41,10 @@ services:
     ports:
       - "3030:3000"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # LLM provider para o chatbot — mesma regra do backend (OpenAI ou Anthropic)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4.1-mini}
       - BACKEND_API_URL=${BACKEND_API_URL}
       - BACKEND_API_KEY=${BACKEND_API_KEY}
       - HOSTNAME=0.0.0.0
