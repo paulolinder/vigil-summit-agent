@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { RichLead, Message } from '@/lib/types'
+import { checkinLead, markNoShow, simulateEngagement } from '@/lib/api'
 
 const STAGE_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
   REGISTERED:        { label: 'Inscrito',       color: 'text-brand-teal',  bg: 'bg-brand-teal/10',  border: 'border-brand-teal/30' },
@@ -71,6 +72,19 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
     }
   }
 
+  const [actionMsg, setActionMsg] = useState<string | null>(null)
+
+  async function runAction(fn: () => Promise<unknown>, ok: string) {
+    setActionMsg(null)
+    try {
+      await fn()
+      // Padrão do dashboard: o Realtime (FunnelBoard) propaga a mudança de stage/engajamento.
+      setActionMsg(ok)
+    } catch {
+      setActionMsg('Falha na ação (verifique se está logado).')
+    }
+  }
+
   const stage = STAGE_STYLE[lead.stage] ?? {
     label: lead.stage, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200',
   }
@@ -136,6 +150,35 @@ export default function LeadDrawer({ lead, messages, onClose }: LeadDrawerProps)
             }`}>
               {agentResult.message}
             </p>
+          )}
+          <div className="mt-3 grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => runAction(() => checkinLead(lead.id), 'Check-in registrado — aguarde o Realtime')}
+              className="bg-brand-teal/10 text-brand-teal text-[11px] font-bold py-2 rounded-md hover:bg-brand-teal/20 transition-colors"
+            >
+              ✓ Check-in
+            </button>
+            <button
+              onClick={() => runAction(() => markNoShow(lead.id), 'No-show registrado — aguarde o Realtime')}
+              className="bg-red-50 text-red-500 text-[11px] font-bold py-2 rounded-md hover:bg-red-100 transition-colors"
+            >
+              ✗ No-show
+            </button>
+            <button
+              onClick={() => runAction(() => simulateEngagement(lead.id, { opened: true }), 'Abertura simulada')}
+              className="bg-brand-bg text-brand-muted text-[11px] font-bold py-2 rounded-md hover:bg-brand-border/40 transition-colors"
+            >
+              ✉ Simular abertura
+            </button>
+            <button
+              onClick={() => runAction(() => simulateEngagement(lead.id, { clicked: true }), 'Clique simulado')}
+              className="bg-brand-bg text-brand-muted text-[11px] font-bold py-2 rounded-md hover:bg-brand-border/40 transition-colors"
+            >
+              🔗 Simular clique
+            </button>
+          </div>
+          {actionMsg && (
+            <p className="text-[10px] mt-1.5 text-center font-semibold text-brand-muted">{actionMsg}</p>
           )}
         </div>
 
