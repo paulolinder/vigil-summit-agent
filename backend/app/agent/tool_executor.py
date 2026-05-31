@@ -120,36 +120,21 @@ async def _send_whatsapp(tool_input: dict, sb) -> str:
     lead_id = tool_input["lead_id"]
     text = tool_input.get("text", "")
 
-    lead = await _db(lambda: sb.table("leads").select("phone, whatsapp_consent_at").eq("id", lead_id).single().execute().data)
+    lead = await _db(lambda: sb.table("leads").select("id, phone, whatsapp_consent_at").eq("id", lead_id).single().execute().data)
     if not lead:
         return "Lead não encontrado"
 
+    # Trava de consentimento LGPD — permanece no tool_executor, antes do serviço.
     if not lead.get("whatsapp_consent_at"):
         return "Lead não optou por WhatsApp — mensagem não enviada"
-
     if not lead.get("phone"):
         return "Telefone não cadastrado — mensagem não enviada"
 
-    if not settings.evolution_api_url or not settings.evolution_api_key:
-        return "Evolution API não configurada"
-
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"{settings.evolution_api_url}/message/sendText/{settings.evolution_instance_name}",
-                headers={"apikey": settings.evolution_api_key},
-                json={"number": lead["phone"], "text": text},
-            )
-            resp.raise_for_status()
-
-        await _db(lambda: sb.table("messages").insert({
-            "lead_id": lead_id,
-            "channel": "WHATSAPP",
-            "direction": "OUT",
-            "body": text,
-            "sent_at": datetime.now(timezone.utc).isoformat(),
-        }).execute())
-
+        from app.services.whatsapp import send_whatsapp_message
+        result = await send_whatsapp_message(lead, text, sb)
+        if result.get("simulated"):
+            return f"WhatsApp SIMULADO registrado para {lead['phone']}"
         return f"WhatsApp enviado para {lead['phone']}"
     except Exception as e:
         return f"Erro WhatsApp: {e}"
