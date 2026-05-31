@@ -36,6 +36,8 @@ export type Message = {
   opened_at: string | null
   clicked_at: string | null
   subject: string | null
+  channel?: string | null
+  status?: string | null
 }
 
 export type ActivityEvent = {

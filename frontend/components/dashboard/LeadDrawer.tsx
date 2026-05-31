@@ -32,6 +32,9 @@ function msgBorderColor(msg: Message): string {
 }
 
 function msgStatus(msg: Message): string {
+  if (msg.channel === 'WHATSAPP') {
+    return msg.status === 'SIMULATED' ? '📱 WhatsApp (simulado)' : '📱 WhatsApp enviado'
+  }
   const parts: string[] = []
   if (msg.opened_at) parts.push('✓ Aberto')
   if (msg.clicked_at) parts.push('✓ Link clicado')

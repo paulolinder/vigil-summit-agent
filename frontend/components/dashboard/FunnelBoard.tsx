@@ -129,7 +129,7 @@ export default function FunnelBoard() {
           try {
             const { data, error: msgErr } = await supabase
               .from('messages')
-              .select('lead_id, sent_at, opened_at, clicked_at, subject')
+              .select('lead_id, sent_at, opened_at, clicked_at, subject, channel, status')
               .in('lead_id', ids)
               .eq('direction', 'OUT')
               .order('sent_at', { ascending: false })
@@ -142,7 +142,7 @@ export default function FunnelBoard() {
             if (pgErr?.code !== '42703') throw err
             const { data } = await supabase
               .from('messages')
-              .select('lead_id, sent_at, opened_at, clicked_at')
+              .select('lead_id, sent_at, opened_at, clicked_at, channel, status')
               .in('lead_id', ids)
               .eq('direction', 'OUT')
               .order('sent_at', { ascending: false })
