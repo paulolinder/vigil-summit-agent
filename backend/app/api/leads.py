@@ -120,6 +120,43 @@ async def mark_no_show(lead_id: str, background_tasks: BackgroundTasks):
     return {"status": "marked_no_show" if outcome == "OK" else "already_no_show"}
 
 
+@router.post("/{lead_id}/simulate-engagement", dependencies=[Security(_require_api_key)])
+async def simulate_engagement(lead_id: str, payload: dict):
+    """Demo: marca a última mensagem OUT/EMAIL do lead como aberta/clicada, espelhando
+    o webhook do Resend. Permite ao avaliador dirigir o branching da régua na janela
+    comprimida. Idempotente: só seta o que ainda é nulo (igual ao webhook)."""
+    opened = bool(payload.get("opened"))
+    clicked = bool(payload.get("clicked"))
+    sb = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+
+    msgs = await asyncio.to_thread(lambda: (
+        sb.table("messages")
+        .select("id")
+        .eq("lead_id", lead_id)
+        .eq("direction", "OUT")
+        .eq("channel", "EMAIL")
+        .order("sent_at", desc=True)
+        .limit(1)
+        .execute()
+        .data
+    ))
+    if not msgs:
+        raise HTTPException(status_code=404, detail="Nenhum email enviado para este lead")
+
+    msg_id = msgs[0]["id"]
+
+    # Um clique implica uma abertura — seta opened_at se opened OU clicked.
+    if opened or clicked:
+        await asyncio.to_thread(lambda: sb.table("messages")
+            .update({"opened_at": now}).eq("id", msg_id).is_("opened_at", "null").execute())
+    if clicked:
+        await asyncio.to_thread(lambda: sb.table("messages")
+            .update({"clicked_at": now}).eq("id", msg_id).is_("clicked_at", "null").execute())
+
+    return {"status": "ok", "message_id": msg_id, "opened": opened, "clicked": clicked}
+
+
 @router.post("/{lead_id}/run-agent", dependencies=[Security(_require_api_key)])
 async def run_agent_endpoint(
     lead_id: str,

@@ -374,3 +374,37 @@ def test_checkin_lead_invalid_transition(client, mock_supabase):
         headers={"X-API-Key": TEST_API_KEY},
     )
     assert resp.status_code == 409
+
+
+def test_simulate_engagement_sets_opened(client, mock_supabase):
+    # última msg OUT/EMAIL existe
+    (mock_supabase.return_value.table.return_value
+        .select.return_value.eq.return_value.eq.return_value.eq.return_value
+        .order.return_value.limit.return_value.execute.return_value.data) = [{"id": "msg-1"}]
+    (mock_supabase.return_value.table.return_value
+        .update.return_value.eq.return_value.is_.return_value.execute.return_value) = MagicMock()
+
+    resp = client.post(
+        "/api/leads/lead-1/simulate-engagement",
+        json={"opened": True, "clicked": False},
+        headers={"X-API-Key": TEST_API_KEY},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+def test_simulate_engagement_requires_api_key(client):
+    resp = client.post("/api/leads/lead-1/simulate-engagement", json={"opened": True})
+    assert resp.status_code in (401, 403)
+
+
+def test_simulate_engagement_404_when_no_message(client, mock_supabase):
+    (mock_supabase.return_value.table.return_value
+        .select.return_value.eq.return_value.eq.return_value.eq.return_value
+        .order.return_value.limit.return_value.execute.return_value.data) = []
+    resp = client.post(
+        "/api/leads/lead-1/simulate-engagement",
+        json={"opened": True},
+        headers={"X-API-Key": TEST_API_KEY},
+    )
+    assert resp.status_code == 404
