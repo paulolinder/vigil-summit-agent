@@ -1,9 +1,7 @@
 # backend/tests/test_services_whatsapp.py
-import pytest
 from unittest.mock import patch, MagicMock
 
 
-@pytest.mark.asyncio
 async def test_simulated_when_no_evolution_key():
     from app.config import settings
     from app.services.whatsapp import send_whatsapp_message
