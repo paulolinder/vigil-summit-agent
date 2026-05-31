@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     cal_webhook_secret: str = ""
     api_key: str = ""  # Header X-API-Key para endpoints operacionais e de leitura
     stale_job_threshold_hours: int = 2
+    demo_fast_forward: bool = False  # comprime a régua (dias→minutos) para a demo
     frontend_url: str = "http://localhost:3030"
     # Origens permitidas pelo CORS — separadas por vírgula em produção
     cors_origins: str = "http://localhost:3000"

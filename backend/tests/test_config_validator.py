@@ -32,3 +32,9 @@ def test_openai_only_boots(monkeypatch):
 def test_no_llm_key_raises(monkeypatch):
     with pytest.raises(Exception):
         _reload_config(monkeypatch, anthropic=None, openai=None)
+
+
+def test_demo_fast_forward_defaults_false(monkeypatch):
+    monkeypatch.delenv("DEMO_FAST_FORWARD", raising=False)
+    cfg = _reload_config(monkeypatch, anthropic="sk-ant-x", openai=None)
+    assert cfg.settings.demo_fast_forward is False
