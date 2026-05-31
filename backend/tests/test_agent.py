@@ -2,6 +2,28 @@ import asyncio
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
+from app.llm.base import Turn, ToolCall
+
+
+class _FakeAdapter:
+    """Scripted adapter for orchestrator tests. Returns turns in order; records tool results."""
+    def __init__(self, turns):
+        self._turns = list(turns)
+        self.tool_results = []
+
+    def init_messages(self, system, user_text):
+        return []
+
+    async def create_turn(self, system, messages, tools, max_tokens):
+        return self._turns.pop(0)
+
+    def append_assistant(self, messages, turn):
+        messages.append({"role": "assistant"})
+
+    def append_tool_results(self, messages, results):
+        self.tool_results.extend(results)
+        messages.append({"role": "tool"})
+
 
 def _make_sb(lead_data=None, lock_insert_raises=False):
     """Build a per-table supabase mock for orchestrator tests."""
@@ -85,23 +107,13 @@ async def test_run_agent_lead_not_found():
 
 
 async def test_run_agent_end_turn_single_iteration():
-    """Agent receives end_turn on first response — completes in 1 iteration."""
+    """Agent receives end_turn on first turn — completes in 1 iteration."""
     mock_sb = _make_sb(lead_data=_LEAD)
-
-    mock_block = MagicMock()
-    mock_block.type = "text"
-    mock_block.text = "Vou enriquecer o lead."
-
-    mock_response = MagicMock()
-    mock_response.stop_reason = "end_turn"
-    mock_response.content = [mock_block]
-
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_response)
+    fake = _FakeAdapter([Turn(text="Vou avaliar.", tool_calls=[], stop_reason="end_turn")])
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
          patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
-         patch("app.agent.orchestrator._get_client", return_value=mock_client), \
+         patch("app.agent.orchestrator.get_adapter", return_value=fake), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="system")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()):
 
@@ -109,37 +121,21 @@ async def test_run_agent_end_turn_single_iteration():
         result = await run_agent("lead-001", "NEW_LEAD_REGISTERED")
 
     assert "1 iterações" in result
-    mock_client.messages.create.assert_called_once()
 
 
 async def test_run_agent_tool_use_then_end_turn():
-    """Agent calls one tool, then ends on the next turn."""
+    """Agent calls one tool, then ends on the next turn; tool result is round-tripped."""
     mock_sb = _make_sb(lead_data=_LEAD)
-
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "update_lead_stage"
-    tool_block.id = "tool-1"
-    tool_block.input = {"lead_id": "lead-001", "stage": "ENRICHED"}
-
-    end_block = MagicMock()
-    end_block.type = "text"
-    end_block.text = "Feito."
-
-    tool_response = MagicMock()
-    tool_response.stop_reason = "tool_use"
-    tool_response.content = [tool_block]
-
-    end_response = MagicMock()
-    end_response.stop_reason = "end_turn"
-    end_response.content = [end_block]
-
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=[tool_response, end_response])
+    fake = _FakeAdapter([
+        Turn(text="Vou atualizar.",
+             tool_calls=[ToolCall(id="tool-1", name="update_lead_stage", input={"lead_id": "lead-001", "stage": "ENRICHED"})],
+             stop_reason="tool_use"),
+        Turn(text="Feito.", tool_calls=[], stop_reason="end_turn"),
+    ])
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
          patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
-         patch("app.agent.orchestrator._get_client", return_value=mock_client), \
+         patch("app.agent.orchestrator.get_adapter", return_value=fake), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="system")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()), \
          patch("app.agent.orchestrator.execute_tool", new=AsyncMock(return_value="Stage atualizado")):
@@ -148,15 +144,18 @@ async def test_run_agent_tool_use_then_end_turn():
         result = await run_agent("lead-001", "NEW_LEAD_REGISTERED")
 
     assert "2 iterações" in result
+    assert fake.tool_results == [("tool-1", "Stage atualizado")]
 
 
 async def test_run_agent_releases_lock_on_exception():
-    """Finally block releases lock even when an unexpected error occurs inside the agent loop."""
+    """Finally block releases the lock even when create_turn raises."""
     mock_sb = _make_sb(lead_data=_LEAD)
 
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=RuntimeError("API offline"))
+    class _BoomAdapter(_FakeAdapter):
+        async def create_turn(self, system, messages, tools, max_tokens):
+            raise RuntimeError("API offline")
 
+    fake = _BoomAdapter([])
     deleted = []
 
     def track_delete():
@@ -167,7 +166,7 @@ async def test_run_agent_releases_lock_on_exception():
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
          patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
-         patch("app.agent.orchestrator._get_client", return_value=mock_client), \
+         patch("app.agent.orchestrator.get_adapter", return_value=fake), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="system")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()):
 
@@ -194,21 +193,9 @@ async def test_run_agent_aborts_when_lock_not_acquired():
 
 
 async def test_run_agent_heartbeat_cancelled_on_completion():
-    """Heartbeat task is cancelled when agent finishes normally."""
+    """Heartbeat task is cancelled when the agent finishes normally."""
     mock_sb = _make_sb(lead_data=_LEAD)
-    mock_sb.rpc = MagicMock(
-        return_value=MagicMock(execute=MagicMock(return_value=MagicMock(data=True)))
-    )
-
-    mock_block = MagicMock()
-    mock_block.type = "text"
-    mock_block.text = "Done."
-    mock_response = MagicMock()
-    mock_response.stop_reason = "end_turn"
-    mock_response.content = [mock_block]
-
-    mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_response)
+    fake = _FakeAdapter([Turn(text="Done.", tool_calls=[], stop_reason="end_turn")])
 
     heartbeat_cancelled = []
 
@@ -221,7 +208,7 @@ async def test_run_agent_heartbeat_cancelled_on_completion():
 
     with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
          patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
-         patch("app.agent.orchestrator._get_client", return_value=mock_client), \
+         patch("app.agent.orchestrator.get_adapter", return_value=fake), \
          patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="sys")), \
          patch("app.agent.orchestrator.save_memory", new=AsyncMock()), \
          patch("app.agent.orchestrator.heartbeat_loop", fake_heartbeat):
