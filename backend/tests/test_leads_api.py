@@ -127,6 +127,7 @@ def test_resend_webhook_returns_401_without_svix_headers(client):
 def test_calcom_webhook_updates_lead_stage_on_booking_created(client):
     """Cal.com BOOKING_CREATED webhook sets MEETING_SCHEDULED when signature is valid."""
     import hashlib, hmac as hmac_lib, json as jsonlib
+    from unittest.mock import AsyncMock
     secret = "test-valid-secret"
     payload_dict = {
         "triggerEvent": "BOOKING_CREATED",
@@ -136,9 +137,8 @@ def test_calcom_webhook_updates_lead_stage_on_booking_created(client):
     sig = "sha256=" + hmac_lib.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
     with patch("app.api.webhooks.settings") as mock_settings, \
-         patch("app.api.webhooks.get_supabase") as mock_sb:
+         patch("app.services.meeting.apply_booking_created", new=AsyncMock(return_value=None)) as mock_apply:
         mock_settings.cal_webhook_secret = secret
-        mock_sb.return_value.table.return_value.update.return_value.eq.return_value.in_.return_value.execute.return_value = None
         resp = client.post(
             "/api/webhooks/calcom",
             content=body,
@@ -146,6 +146,7 @@ def test_calcom_webhook_updates_lead_stage_on_booking_created(client):
         )
     assert resp.status_code == 200
     assert resp.json()["received"] is True
+    mock_apply.assert_called_once_with("maria@banco.com.br")
 
 
 def test_calcom_webhook_ignores_non_booking_events(client):
@@ -319,6 +320,7 @@ def test_calcom_webhook_returns_401_without_signature(client):
 def test_calcom_webhook_accepts_valid_signature(client):
     """Webhook accepts request with valid HMAC-SHA256 signature."""
     import hashlib, hmac as hmac_lib, json as jsonlib
+    from unittest.mock import AsyncMock
     secret = "test-secret-for-calcom-valid"
     payload_dict = {
         "triggerEvent": "BOOKING_CREATED",
@@ -328,9 +330,8 @@ def test_calcom_webhook_accepts_valid_signature(client):
     sig = "sha256=" + hmac_lib.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
     with patch("app.api.webhooks.settings") as mock_settings, \
-         patch("app.api.webhooks.get_supabase") as mock_sb:
+         patch("app.services.meeting.apply_booking_created", new=AsyncMock(return_value=None)):
         mock_settings.cal_webhook_secret = secret
-        mock_sb.return_value.table.return_value.update.return_value.eq.return_value.in_.return_value.execute.return_value = None
         resp = client.post(
             "/api/webhooks/calcom",
             content=body,

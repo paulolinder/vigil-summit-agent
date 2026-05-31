@@ -104,18 +104,6 @@ async def calcom_webhook(
     if not attendee_email:
         return {"received": True}
 
-    sb = get_supabase()
-    # One email may map to multiple leads (multiple events). Transition each via the
-    # authoritative CAS RPC (valid sources: ATTENDED/NO_SHOW) — never a plain UPDATE
-    # for stage changes.
-    rows = await asyncio.to_thread(
-        lambda: sb.table("leads").select("id").eq("email", attendee_email).execute().data
-    )
-    for row in rows or []:
-        await asyncio.to_thread(lambda lid=row["id"]: sb.rpc("atomic_transition_lead_stage", {
-            "p_lead_id": lid,
-            "p_target_stage": "MEETING_SCHEDULED",
-            "p_valid_from_stages": ["ATTENDED", "NO_SHOW"],
-        }).execute())
-
+    from app.services.meeting import apply_booking_created
+    await apply_booking_created(attendee_email)
     return {"received": True}
