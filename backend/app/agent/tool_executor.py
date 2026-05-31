@@ -58,9 +58,9 @@ async def _enrich_lead(lead_id: str, sb) -> str:
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                "https://api.apollo.io/v1/people/match",
+                "https://api.apollo.io/api/v1/people/match",
                 headers={"x-api-key": settings.apollo_api_key, "Content-Type": "application/json"},
-                json={"email": lead["email"], "organization_name": lead.get("company")},
+                params={"email": lead["email"], "organization_name": lead.get("company")},
             )
             resp.raise_for_status()
             data = resp.json()
