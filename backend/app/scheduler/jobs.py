@@ -35,6 +35,17 @@ async def check_and_run_job(job_id: str) -> None:
     condition = job.get("condition") or {}
     lead_id = job["lead_id"]
 
+    # Booking simulado (modo demo): transita via o MESMO caminho do webhook real do
+    # Cal.com. Não passa pelo agente nem pelas condições — é resolução direta de stage.
+    if job["job_type"] == "SIMULATED_BOOKING":
+        lead_row = await _db(lambda: sb.table("leads").select("email").eq("id", lead_id).single().execute().data)
+        email = (lead_row or {}).get("email")
+        if email:
+            from app.services.meeting import apply_booking_created
+            await apply_booking_created(email)
+        await _db(lambda: sb.table("scheduled_jobs").update({"status": "DONE"}).eq("id", job_id).execute())
+        return
+
     lead = await _db(
         lambda: sb.table("leads").select("stage").eq("id", lead_id).single().execute().data
     )

@@ -270,3 +270,26 @@ async def test_reload_resets_stuck_running_jobs():
 
     reset_calls = [c for c in update_calls if isinstance(c, dict) and c.get("status") == "PENDING"]
     assert len(reset_calls) >= 1, f"Expected RUNNING→PENDING reset, got: {update_calls}"
+
+
+async def test_simulated_booking_calls_apply_and_skips_agent():
+    """Job SIMULATED_BOOKING transita via apply_booking_created e NÃO chama o agente."""
+    job = {**_JOB, "job_type": "SIMULATED_BOOKING"}
+    mock_sb = _make_sb(job=job, lead_stage="ATTENDED")
+    # leads.email lookup para resolver o email do lead
+    mock_sb.table("leads").select.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+        "stage": "ATTENDED", "email": "ana@x.com",
+    }
+
+    mock_run_agent = AsyncMock()
+    mock_apply = AsyncMock()
+    with patch("app.scheduler.jobs.get_supabase", return_value=mock_sb), \
+         patch("app.scheduler.jobs.run_agent", mock_run_agent), \
+         patch("app.services.meeting.apply_booking_created", mock_apply):
+        from app.scheduler.jobs import check_and_run_job
+        await check_and_run_job("job-001")
+
+    mock_apply.assert_called_once_with("ana@x.com")
+    mock_run_agent.assert_not_called()
+    update_calls = str(mock_sb.table("scheduled_jobs").update.call_args_list)
+    assert "DONE" in update_calls
