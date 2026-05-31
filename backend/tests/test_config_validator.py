@@ -3,12 +3,11 @@ import pytest
 
 
 def _reload_config(monkeypatch, anthropic, openai):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    if anthropic is not None:
-        monkeypatch.setenv("ANTHROPIC_API_KEY", anthropic)
-    if openai is not None:
-        monkeypatch.setenv("OPENAI_API_KEY", openai)
+    # Set absent keys to "" (not delenv): a real env var — even empty — takes
+    # precedence over the on-disk .env file in pydantic-settings, so this isolates
+    # the test from backend/.env (which carries a real ANTHROPIC_API_KEY).
+    monkeypatch.setenv("ANTHROPIC_API_KEY", anthropic if anthropic is not None else "")
+    monkeypatch.setenv("OPENAI_API_KEY", openai if openai is not None else "")
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "test-key")
     monkeypatch.setenv("RESEND_API_KEY", "re_test")
