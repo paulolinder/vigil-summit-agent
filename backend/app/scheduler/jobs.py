@@ -2,7 +2,11 @@ import asyncio
 import random
 from datetime import datetime, timezone, timedelta
 from app.db.client import get_supabase
-from app.agent.orchestrator import run_agent
+from app.agent.orchestrator import run_agent, LOCK_BUSY
+
+# Teto de re-tentativas por contenção de lock — evita loop infinito se o lock
+# ficar preso (ex.: heartbeat renovando uma execução lenta).
+MAX_CONTENTION = 5
 
 
 async def _db(fn):
@@ -93,7 +97,27 @@ async def check_and_run_job(job_id: str) -> None:
             return
 
     try:
-        await run_agent(lead_id, job["job_type"])
+        result = await run_agent(lead_id, job["job_type"])
+
+        if result == LOCK_BUSY:
+            # Contenção, não falha: re-enfileira com atraso curto, sem mexer em retry_count.
+            contention = (job.get("contention_count") or 0) + 1
+            if contention <= MAX_CONTENTION:
+                next_run = datetime.now(timezone.utc) + timedelta(seconds=30)
+                await _db(lambda: sb.table("scheduled_jobs").update({
+                    "status": "PENDING",
+                    "contention_count": contention,
+                    "run_at": next_run.isoformat(),
+                }).eq("id", job_id).execute())
+                from app.scheduler.runner import add_job_to_scheduler
+                add_job_to_scheduler(job_id, next_run)
+            else:
+                await _db(lambda: sb.table("scheduled_jobs").update({
+                    "status": "FAILED",
+                    "error": "lock preso: máximo de contenções atingido",
+                }).eq("id", job_id).execute())
+            return
+
         await _db(
             lambda: sb.table("scheduled_jobs").update({"status": "DONE"}).eq("id", job_id).execute()
         )

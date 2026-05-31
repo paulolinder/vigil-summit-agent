@@ -293,3 +293,40 @@ async def test_simulated_booking_calls_apply_and_skips_agent():
     mock_run_agent.assert_not_called()
     update_calls = str(mock_sb.table("scheduled_jobs").update.call_args_list)
     assert "DONE" in update_calls
+
+
+async def test_lock_busy_reenqueues_without_retry_increment():
+    """run_agent retornando LOCK_BUSY re-enfileira (PENDING) sem incrementar retry_count."""
+    from app.agent.orchestrator import LOCK_BUSY
+    job = {**_JOB, "contention_count": 0}
+    mock_sb = _make_sb(job=job, lead_stage="ENRICHED")
+
+    with patch("app.scheduler.jobs.get_supabase", return_value=mock_sb), \
+         patch("app.scheduler.jobs.run_agent", AsyncMock(return_value=LOCK_BUSY)), \
+         patch("app.scheduler.runner.add_job_to_scheduler") as mock_add:
+        from app.scheduler.jobs import check_and_run_job
+        await check_and_run_job("job-001")
+
+    update_calls = str(mock_sb.table("scheduled_jobs").update.call_args_list)
+    assert "contention_count" in update_calls
+    assert "PENDING" in update_calls
+    assert "DONE" not in update_calls
+    assert "retry_count" not in update_calls
+    mock_add.assert_called_once()
+
+
+async def test_lock_busy_fails_after_max_contention():
+    """Atingido o teto de contenção, o job vai para FAILED (sem loop infinito)."""
+    from app.agent.orchestrator import LOCK_BUSY
+    job = {**_JOB, "contention_count": 5}  # já no teto
+    mock_sb = _make_sb(job=job, lead_stage="ENRICHED")
+
+    with patch("app.scheduler.jobs.get_supabase", return_value=mock_sb), \
+         patch("app.scheduler.jobs.run_agent", AsyncMock(return_value=LOCK_BUSY)), \
+         patch("app.scheduler.runner.add_job_to_scheduler") as mock_add:
+        from app.scheduler.jobs import check_and_run_job
+        await check_and_run_job("job-001")
+
+    update_calls = str(mock_sb.table("scheduled_jobs").update.call_args_list)
+    assert "FAILED" in update_calls
+    mock_add.assert_not_called()
