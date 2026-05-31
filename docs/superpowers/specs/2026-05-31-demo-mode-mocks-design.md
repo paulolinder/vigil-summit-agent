@@ -1,10 +1,13 @@
 # Modo Demo & Mocks de Integrações Externas — Design
 
 **Data:** 2026-05-31
-**Status:** Aprovado para planejamento
+**Status:** Aprovado para planejamento (revisado pós code-review)
 **Contexto:** Case técnico Vigil.AI (vaga AI Engineer, Pareto). O time avaliador precisa
 testar o funil ponta-a-ponta **sem chaves de APIs pagas**. Hoje, sem `APOLLO_API_KEY`
 (e análogos), o funil trava num beco-sem-saída (`"Apollo.io não configurado"`).
+
+> **Histórico:** este spec foi revisado por um code-review contra o código real.
+> Os achados estão incorporados — ver §13 (Achados do review e resoluções).
 
 ---
 
@@ -21,28 +24,49 @@ Princípio condutor: **degradação graciosa por serviço**, espelhando o padrã
 mock; presença da chave usa a API real. **Mesmo código** roda em modo demo e em
 produção, sem reescrita.
 
-### Fluxo de demonstração (resultado esperado)
+### Fluxo de demonstração — DUAS FASES
 
+O funil tem uma fronteira realista: a fase pós-evento (follow-up + reunião) só faz
+sentido **depois que o evento aconteceu**. No código, "o evento aconteceu" é
+sinalizado pelos endpoints `/checkin` (→ ATTENDED) e `/no-show` (→ NO_SHOW). A demo
+respeita isso em duas fases:
+
+**FASE 1 — autônoma (cadastro → régua pré-evento):**
 ```
 Formulário (nome, email, telefone, consentimentos)
   → POST /api/leads → REGISTERED → run_agent("NEW_LEAD_REGISTERED")
        PASSO 1: enrich_lead()              → MOCK determinístico → grava lead_enrichment, ENRICHED
        PASSO 2: send_pre_event_msg("welcome") → Resend REAL (boas-vindas personalizado)
-       PASSO 3: agenda a régua (jobs)      → datas comprimidas se DEMO_FAST_FORWARD
+       PASSO 3: agenda a régua pré-evento   → datas comprimidas se DEMO_FAST_FORWARD
   → triggers da régua disparam email REAL + send_whatsapp() MOCK (visível no dashboard)
-  → pós-evento: schedule_meeting() MOCK → link fake + booking simulado → MEETING_SCHEDULED
+     (lead sobe REGISTERED → ENRICHED → CONFIRMED conforme engajamento)
 ```
+
+**FASE 2 — disparada pelo avaliador (simula o evento → fecha o funil):**
+```
+Avaliador clica "Check-in" (ATTENDED) ou "No-show" no dashboard
+  → run_agent("LEAD_ATTENDED" | "LEAD_NO_SHOW")
+       → agenda régua pós-evento (FOLLOWUP_D3/D7/D14 | NOSHOW_D3/D7), comprimida
+  → FOLLOWUP_D3 / NOSHOW_D3 → schedule_meeting() MOCK
+       → link fake + job SIMULATED_BOOKING
+  → SIMULATED_BOOKING → apply_booking_created() → ATTENDED/NO_SHOW → MEETING_SCHEDULED
+```
+
+> **Nota de honestidade:** o check-in/no-show modela a mesa de credenciamento real do
+> evento — não é um atalho de demo. É o mesmo sinal que existiria em produção.
 
 ---
 
-## 2. Decisões travadas (do brainstorming)
+## 2. Decisões travadas (do brainstorming + review)
 
 1. **Escopo do mock:** Apollo, Cal.com **e** WhatsApp/Evolution. Email + LLM reais.
 2. **Ativação:** ausência da chave do serviço → mock automático (por serviço, não global).
 3. **Dados de enriquecimento:** determinístico por `email`/domínio + pools curados do ICP de ciberssegurança.
 4. **WhatsApp:** dentro do escopo do funil; mockado e visível no dashboard (`status=SIMULATED`).
 5. **Régua na demo:** flag `DEMO_FAST_FORWARD` comprime os intervalos (dias → minutos) sem mudar a lógica.
-6. **Fechar o funil:** mock dispara um **webhook simulado** pelo mesmo caminho de transição da produção (preserva o invariante "stage de reunião só pelo webhook").
+6. **Fechar o funil:** mock dispara um **webhook simulado** pelo mesmo caminho de transição da produção.
+7. **Fronteira do evento:** a fase pós-evento é disparada pelo avaliador via check-in/no-show no dashboard (reuso dos endpoints existentes; UI a ser fiada).
+8. **Resiliência de lock:** jobs que perdem o lock de agente são re-enfileirados (corrige bug latente de produção e a colisão sob compressão).
 
 ---
 
@@ -61,7 +85,7 @@ app/services/
   whatsapp.py         (NOVO) send_whatsapp_message(lead, text) -> dict
   meeting.py          (NOVO) generate_meeting_link(lead) -> dict
                              apply_booking_created(email) -> None   (núcleo extraído do webhook)
-  mocks.py            (NOVO) geradores determinísticos + flags de modo
+  mocks.py            (NOVO) geradores determinísticos
 ```
 
 ### Detecção real-vs-mock
@@ -93,29 +117,34 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
 
 ### Requisitos
 
-- **Determinístico:** `seed = int(sha256(email.lower()).hexdigest(), 16)`. Mesmo
-  email ⇒ mesmo perfil, sempre. (Demo repetível e documentável.)
+- **Determinístico:** `seed = int(sha256(email.lower().encode()).hexdigest(), 16)`.
+  Mesmo email ⇒ mesmo perfil, sempre. (Demo repetível e documentável; `sha256` é
+  estável entre processos — sem dependência de `hash()` aleatorizado do Python.)
 - **Apollo-shaped:** o campo `sector` DEVE sair no vocabulário de indústria do
   Apollo (ex.: `"financial services"`, `"computer software"`, `"hospital & health care"`,
   `"manufacturing"`) para casar com o mapa `_APOLLO_TO_SECTOR` em `resend_service.py`.
-  Se o setor não casar, a personalização por setor degrada para o texto default —
-  então os valores do pool são escolhidos **dentre as chaves de `_APOLLO_TO_SECTOR`**.
-- **ICP-calibrado:** pools de `title`, `seniority`, `company_size` e
-  `security_signals` representando CISOs/CTOs/diretores de TI/gestores de risco.
+  O pool de setores do mock é um **subconjunto explícito das chaves de
+  `_APOLLO_TO_SECTOR`** (teste garante isso — §10).
+- **Paridade real/mock:** a saída do mock contém **exatamente os mesmos campos** que o
+  upsert do Apollo real grava hoje (`tool_executor._enrich_lead`). O Apollo real
+  **não grava `security_signals`**, então o mock **também não** — o sinal de
+  interesse em segurança entra **dentro do `enrichment_summary`** (campo que é de
+  fato consumido por `prompts.py`). Isso evita divergência de dados real-vs-mock.
+- **ICP-calibrado:** pools de `title`, `seniority` e `company_size` representando
+  CISOs/CTOs/diretores de TI/gestores de risco.
 
-### Saída (formato que o `tool_executor._enrich_lead` espera hoje)
+### Saída (formato idêntico ao upsert real em `tool_executor._enrich_lead`)
 
 ```python
 {
   "real_role": str,            # ex. "Chief Information Security Officer"
   "company": str,              # do lead, ou derivada do domínio do email
-  "sector": str,               # Apollo-shaped (chave de _APOLLO_TO_SECTOR)
+  "sector": str,               # Apollo-shaped (subconjunto de _APOLLO_TO_SECTOR)
   "company_size": str,         # ex. "1200"
   "linkedin_url": str,         # fake plausível: linkedin.com/in/<slug>
   "is_decision_maker": bool,   # derivado da seniority
-  "security_signals": str,     # ex. "Pesquisou Zero Trust; baixou whitepaper LGPD"
-  "enrichment_summary": str,   # frase pronta para o system prompt
-  "source": "mock",            # distingue de "apollo" nos dados
+  "enrichment_summary": str,   # frase pronta p/ system prompt — INCLUI o sinal de segurança
+  "source": "mock",            # distingue de "apollo"
 }
 ```
 
@@ -128,8 +157,8 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
 3. `seniority`/`title`/`is_decision_maker`: se o lead informou `role`, infere a
    senioridade do texto (contém "ciso"/"cto"/"diretor"/"head" → decisor); senão,
    sorteia do pool com `seed`.
-4. `sector`, `company_size`, `security_signals`: sorteados do pool com `seed`
-   (determinístico).
+4. `sector`, `company_size` e o sinal de segurança (texto embutido no
+   `enrichment_summary`): sorteados do pool com `seed` (determinístico).
 
 ---
 
@@ -141,36 +170,42 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
   antes de chamar o serviço.
 - Sem `evolution_api_key`: o serviço grava em `messages`:
   `channel="WHATSAPP", direction="OUT", body=text, status="SIMULATED",
-  sent_at=now`. Retorna `{"simulated": True}`.
+  sent_at=now`. Retorna `{"simulated": True}`. (`messages.status` é `TEXT` sem
+  CHECK — `"SIMULATED"` é aceito; ver §12 pré-requisitos de schema.)
 - Com chave: comportamento atual (Evolution `sendText`), gravando `status` normal.
-- Dashboard: a coluna/badge de status já existe; `SIMULATED` aparece distinto de
-  `SENT` (ajuste mínimo de label/cor no frontend se necessário — ver §9).
+- Dashboard: badge `SIMULATED` distinto de `SENT` (ajuste de label/cor — ver §9).
 
 ---
 
 ## 6. Meeting mock + webhook simulado (`services/meeting.py`)
 
+> `schedule_meeting()` só é chamado pelos planos **pós-evento** (`FOLLOWUP_D3/D7`,
+> `NOSHOW_D3`). Logo, só executa após a FASE 2 (check-in/no-show), quando o lead já
+> está em `ATTENDED`/`NO_SHOW` — origens válidas da transição.
+
 ### `generate_meeting_link(lead)`
 - **Real:** comportamento atual (busca o event-type no Cal.com, monta o link).
 - **Mock:** monta um link fake plausível
   (`https://cal.com/vigil/demo-vigil?name=...&email=...`) **e** insere um job
-  `SIMULATED_BOOKING` em `scheduled_jobs` com `run_at` curto (segundos/minutos,
-  respeitando `DEMO_FAST_FORWARD`). Retorna o link + nota `[SIMULADO]`.
+  `SIMULATED_BOOKING` em `scheduled_jobs` com `run_at` curto (segundos, respeitando
+  `DEMO_FAST_FORWARD`) e `condition={}`. Retorna o link + nota `[SIMULADO]`.
 
 ### `apply_booking_created(email)` — núcleo extraído do webhook
 - Move-se a lógica essencial de `api/webhooks.py::calcom_webhook` (o loop que
   transita cada lead do email para `MEETING_SCHEDULED` via
   `atomic_transition_lead_stage`, origens `["ATTENDED", "NO_SHOW"]`) para esta
-  função compartilhada.
-- O webhook real passa a: verificar HMAC → parsear → chamar
+  função compartilhada. **Assinatura única: recebe `email`.**
+- O webhook real **mantém** a verificação HMAC e o **503 quando
+  `cal_webhook_secret` está ausente** (§13/#8). Após verificar/parsear, chama
   `apply_booking_created(attendee_email)`.
 - O job simulado chama a **mesma** função → invariante de transição preservado.
 
 ### Roteamento do job simulado (`scheduler/jobs.py`)
-- Assinatura única: `apply_booking_created(email)`. É a função compartilhada com o
-  webhook real (que já tem o email do attendee). O job simulado guarda apenas
-  `lead_id`, então o branch resolve `lead_id → email` e chama a mesma função.
-- `check_and_run_job` ganha um branch **antes** do `run_agent`:
+- O job `SIMULATED_BOOKING` guarda apenas `lead_id`; o branch resolve
+  `lead_id → leads.email` e chama `apply_booking_created(email)`.
+- `check_and_run_job` ganha um branch **antes** de qualquer avaliação de condição e
+  **antes** do `run_agent` (caso contrário o trigger `"SIMULATED_BOOKING"` cairia no
+  fallback genérico do `prompts.py` e rodaria o agente sem instrução):
   ```python
   if job["job_type"] == "SIMULATED_BOOKING":
       email = <buscar leads.email por lead_id>
@@ -178,39 +213,104 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
       # marca DONE; NÃO chama run_agent
       return
   ```
-- As condições existentes (`only_if_stage` etc.) não se aplicam a este tipo; o
-  branch é cedo, antes da avaliação de condições.
-- Persistência: como é um job real em `scheduled_jobs`, sobrevive a restart e fica
-  visível para auditoria.
 
 ---
 
 ## 7. Modo demo acelerado (`DEMO_FAST_FORWARD`)
 
 - Nova flag em `config.py`: `demo_fast_forward: bool = False`.
-- Aplicada **exclusivamente** em `prompts.py::_build_regua()`. Quando ligada, as
-  âncoras deixam de ser datas-calendário (`event_date - 14d`) e passam a ser
-  offsets curtos a partir de `now`:
+- Aplicada **exclusivamente** em `prompts.py::_build_regua()`. A função é síncrona;
+  o acesso ao flag é via **import interno** de `settings` dentro de `_build_regua`
+  (**não** altera a assinatura nem os call sites). Quando ligada, as âncoras deixam
+  de ser datas-calendário e passam a ser offsets curtos a partir de `now`.
+
+### Espaçamento — folga sobre o lock de agente
+
+O lock de agente (`agent_locks`) é segurado durante toda a execução de `run_agent`.
+Uma execução com Claude + tool calls pode levar dezenas de segundos. Se dois jobs do
+**mesmo lead** dispararem mais perto do que a duração de uma execução, o segundo
+perde o lock. Por isso os offsets de demo usam passo de **~2 minutos** (folga
+confortável), e a resiliência de lock (§8) cobre o caso residual.
 
   | Âncora | Produção (off) | Demo (on) |
   |---|---|---|
-  | t14 | `event_date - 14d` | `now + 1min` |
-  | t10 | `event_date - 10d` | `now + 2min` |
-  | t7  | `event_date - 7d`  | `now + 3min` |
-  | t3  | `event_date - 3d`  | `now + 4min` |
-  | t1  | `event_date - 1d`  | `now + 5min` |
-  | t0  | dia do evento      | `now + 6min` |
-  | d3/d7/d14 (pós) | `now + Nd` | `now + N*1min` (escala comprimida) |
+  | t14 | `event_date - 14d` | `now + 2min` |
+  | t10 | `event_date - 10d` | `now + 4min` |
+  | t7  | `event_date - 7d`  | `now + 6min` |
+  | t3  | `event_date - 3d`  | `now + 8min` |
+  | t1  | `event_date - 1d`  | `now + 10min` |
+  | t0  | dia do evento      | `now + 12min` |
+  | d3/d7/d14 (pós) | `now + Nd` | `now + 2/4/6 min` |
 
-- **A lógica da régua não muda:** mesmos `job_type`, mesmas `condition`, mesma
-  ordem e mesmos templates. Só a escala de tempo das âncoras. O agente recebe os
-  timestamps já comprimidos no prompt e os usa nos `schedule_job`.
-- Valores exatos de offset definidos no plano de implementação (config simples,
-  ex.: `_DEMO_OFFSETS`).
+- **A lógica da régua não muda:** mesmos `job_type`, `condition`, ordem e templates.
+  Só a escala de tempo das âncoras. Offsets exatos são configuráveis (constante
+  `_DEMO_OFFSETS`); 2 min é o default seguro.
 
 ---
 
-## 8. Mudanças de config (`config.py`)
+## 8. Resiliência de lock (`scheduler/jobs.py` + `orchestrator.py`)
+
+Bug latente atual: `run_agent` retorna a string `"Agent já em execução... abortando"`
+quando não adquire o lock; `check_and_run_job` marca o job como `DONE` mesmo sem ter
+executado — **o job é perdido** (vale para produção também).
+
+Correção: `check_and_run_job` detecta o retorno de "lock ocupado" e **re-enfileira**
+o job com delay curto (ex.: 30s) em vez de marcar `DONE`.
+
+- Mecanismo: `run_agent` passa a sinalizar o caso de lock-ocupado de forma
+  inequívoca (ex.: retorno sentinela/flag) para `check_and_run_job` não depender de
+  matching de string frágil.
+- Re-enfileira via o mesmo caminho de retry já existente (atualiza `run_at`,
+  `status=PENDING`, `add_job_to_scheduler`), mas com delay fixo curto e **sem**
+  contar como falha/`retry_count` (não é erro — é contenção).
+
+---
+
+## 9. Fase 2 no frontend — fiação de check-in/no-show
+
+**Estado atual:** `lib/api.ts` já tem `checkinLead(lead_id)` e `markNoShow(lead_id)`,
+e os proxies `app/api/leads/[id]/checkin` e `/no-show` existem. Porém essas funções
+**não são chamadas em lugar nenhum** — não há botão na UI.
+
+**Trabalho:** adicionar no `LeadDrawer.tsx` (painel de detalhe do lead) dois botões de
+ação — **"Check-in"** e **"No-show"** — chamando `checkinLead`/`markNoShow`,
+visíveis quando o stage permite a transição (REGISTERED/ENRICHED/CONFIRMED). Após a
+ação, refazer o fetch para refletir o novo stage. Segue o padrão do botão
+`handleRunAgent` já presente no drawer.
+
+---
+
+## 10. Estratégia de testes
+
+- **Determinismo:** `enrich_lead_data` com o mesmo email duas vezes ⇒ dict idêntico.
+- **Apollo-shaped (anti-drift):** `assert` que todo `sector` do pool do mock pertence
+  a `set(_APOLLO_TO_SECTOR.keys())`, e que `_resolve_sector_content(sector)` retorna
+  conteúdo específico (não o default) para cada valor do pool.
+- **Paridade de campos:** o dict do mock tem o mesmo conjunto de chaves que o upsert
+  do Apollo real (sem `security_signals`).
+- **Detecção:** com chave (monkeypatch em `settings`) usa o caminho real (mockando
+  `httpx`); sem chave usa o gerador.
+- **WhatsApp simulado:** sem `evolution_api_key`, `send_whatsapp` grava `messages`
+  com `status="SIMULATED"` e respeita a trava de consentimento (não grava se
+  `whatsapp_consent_at` é nulo).
+- **Booking simulado:** `generate_meeting_link` mock insere job `SIMULATED_BOOKING`
+  (`condition={}`); `check_and_run_job` desse job, com lead em `ATTENDED`, leva o
+  lead a `MEETING_SCHEDULED` via `apply_booking_created` (sem chamar o agente). E
+  com lead em `ENRICHED` (origem inválida), não transita (retorno `INVALID_TRANSITION`).
+- **Webhook real intacto:** `apply_booking_created` extraída produz o mesmo resultado
+  que o handler fazia antes; o handler preserva HMAC e 503 sem secret (regressão).
+- **Resiliência de lock:** job cujo `run_agent` retorna "lock ocupado" é re-enfileirado
+  (`status=PENDING`, `run_at` adiado), não marcado `DONE`, e sem incrementar falha.
+- **Fast-forward:** com `demo_fast_forward=True`, `_build_regua("NEW_LEAD_REGISTERED")`
+  emite `run_at` em minutos a partir de `now` (passo ~2 min); com `False`, em
+  datas-calendário.
+
+Cobertura preservada: os testes existentes de agente/estado/adapters continuam
+passando (o `tool_executor` mantém o mesmo contrato externo).
+
+---
+
+## 11. Mudanças de config (`config.py`)
 
 - `apollo_api_key`, `evolution_api_key`, `cal_api_key`: **já** opcionais (`""`).
   Nenhuma mudança no schema; apenas o comportamento muda (mock no lugar do erro).
@@ -219,7 +319,43 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
 
 ---
 
-## 9. Arquivos afetados
+## 12. Pré-requisitos de schema (verificar antes de implementar)
+
+O `001_initial.sql` está **desatualizado** em relação às migrações posteriores. O
+banco-alvo (incl. ambiente limpo) precisa ter aplicado:
+
+- **`messages.status`** (`TEXT DEFAULT 'SENT'`) — adicionado em
+  `scripts/migrations/001_audit_remediation.sql`. O mock de WhatsApp grava
+  `status="SIMULATED"`; sem essa coluna o INSERT falha. (Não há CHECK constraint em
+  `messages.status`, então `'SIMULATED'` é aceito.)
+- **`scheduled_jobs.status` aceitando `'RUNNING'`** — `001_initial.sql` define
+  `CHECK (status IN ('PENDING','DONE','SKIPPED','FAILED'))` **sem** `'RUNNING'`, mas
+  `claim_scheduled_job` faz `SET status='RUNNING'`. O job `SIMULATED_BOOKING` usa o
+  mesmo claim. Confirmar que o schema aplicado relaxou/corrigiu esse CHECK (a régua
+  atual já depende disso). Se não, incluir o patch do CHECK como pré-requisito.
+
+Esses pontos **não são introduzidos por este feature** (o app já grava `status` e já
+usa `RUNNING`), mas são pré-condições para o caminho demo funcionar.
+
+---
+
+## 13. Achados do code-review e resoluções
+
+| # | Achado | Resolução |
+|---|---|---|
+| 3 | Funil só fecha pós-evento; ATTENDED/NO_SHOW exigem ação manual | Demo em 2 fases (§1); fiação de check-in/no-show no dashboard (§9) |
+| 1 | `messages.status` vem de migração separada | Pré-requisito de schema documentado (§12) |
+| 2 | CHECK de `scheduled_jobs.status` sem `'RUNNING'` | Pré-requisito de schema documentado (§12) |
+| 4 | `security_signals` não é gravado pelo Apollo real | Mock não grava o campo; sinal entra no `enrichment_summary` (§4) |
+| 7 | Lock de agente colide com jobs comprimidos | Espaçamento ~2 min (§7) + re-enfileirar em contenção (§8) |
+| 5 | Pool de setor pode driftar das chaves do mapa | Teste anti-drift `sector ∈ keys` (§10) |
+| 6/9 | Branch `SIMULATED_BOOKING` precisa posição/condição corretas | Branch antes de condições e de `run_agent`; `condition={}` (§6) |
+| 8 | 503 do webhook calcom sem secret | Preservado explicitamente na extração (§6) |
+| 11 | `_build_regua` é síncrona e não recebe `settings` | Import interno de `settings`, sem mudar assinatura (§7) |
+
+---
+
+## 14. Arquivos afetados
 
 **Criar**
 - `backend/app/services/enrichment.py`
@@ -229,13 +365,16 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
 
 **Modificar**
 - `backend/app/agent/tool_executor.py` — remove `httpx`; chama as funções de serviço.
-- `backend/app/api/webhooks.py` — extrai `apply_booking_created`; handler real passa a chamá-la.
-- `backend/app/scheduler/jobs.py` — branch `SIMULATED_BOOKING`.
-- `backend/app/agent/prompts.py` — fast-forward em `_build_regua()`.
+- `backend/app/api/webhooks.py` — extrai `apply_booking_created`; handler real chama-a (mantém HMAC + 503).
+- `backend/app/scheduler/jobs.py` — branch `SIMULATED_BOOKING`; re-enfileirar em contenção de lock.
+- `backend/app/agent/orchestrator.py` — sinalizar lock-ocupado de forma inequívoca.
+- `backend/app/agent/prompts.py` — fast-forward em `_build_regua()` (import interno de `settings`).
 - `backend/app/config.py` — flag `demo_fast_forward`.
 - `backend/.env.example` — documenta modo demo.
-- `CLAUDE.md` — documenta a camada `services/`, o modo demo, o mock por ausência
-  de chave e o invariante do webhook simulado.
+- `frontend/components/dashboard/LeadDrawer.tsx` — botões Check-in / No-show.
+- `frontend/components/dashboard/LeadCard.tsx` (ou onde o badge vive) — label/cor para `SIMULATED`.
+- `CLAUDE.md` — documenta a camada `services/`, o modo demo, o mock por ausência de
+  chave, o webhook simulado e a resiliência de lock.
 
 **Não muda**
 - `services/resend_service.py` (email real), `tools.py` (definições de tool),
@@ -243,50 +382,26 @@ transição de stage porque é o núcleo compartilhado com o webhook real.
 
 ---
 
-## 10. Estratégia de testes
-
-- **Determinismo:** `enrich_lead_data` com o mesmo email duas vezes ⇒ dict idêntico.
-- **Apollo-shaped:** todo `sector` gerado pertence às chaves de `_APOLLO_TO_SECTOR`,
-  e `_resolve_sector_content(sector)` retorna conteúdo específico (não o default).
-- **Detecção:** com chave setada (monkeypatch em `settings`) usa o caminho real
-  (mockando `httpx`); sem chave usa o gerador.
-- **WhatsApp simulado:** sem `evolution_api_key`, `send_whatsapp` grava `messages`
-  com `status="SIMULATED"` e respeita a trava de consentimento (não grava se
-  `whatsapp_consent_at` é nulo).
-- **Booking simulado:** `generate_meeting_link` mock insere job `SIMULATED_BOOKING`;
-  `check_and_run_job` desse job leva o lead `ATTENDED → MEETING_SCHEDULED` via a
-  função compartilhada (sem chamar o agente).
-- **Webhook real intacto:** `apply_booking_created` extraída produz o mesmo
-  resultado que o handler fazia antes (teste de regressão).
-- **Fast-forward:** com `demo_fast_forward=True`, `_build_regua("NEW_LEAD_REGISTERED")`
-  emite `run_at` em minutos a partir de `now`; com `False`, em datas-calendário.
-
-Cobertura preservada: os testes existentes de agente/estado/adapters continuam
-passando (o `tool_executor` mantém o mesmo contrato externo).
-
----
-
-## 11. Pergunta bônus — escalar para 10 eventos regionais simultâneos
+## 15. Pergunta bônus — escalar para 10 eventos regionais simultâneos
 
 Não construído neste escopo, mas a arquitetura sustenta o argumento na documentação:
 
 - **Multi-tenant por `event_id`:** `leads`, `messages`, `scheduled_jobs` já carregam
-  `event_id`; a régua é por-lead/por-evento. Rodar N eventos não exige nova
-  estrutura.
-- **Conteúdo por evento:** os pools de setor e os templates podem ser
-  parametrizados por evento (config/`events`) sem tocar a lógica do agente.
+  `event_id`; a régua é por-lead/por-evento. Rodar N eventos não exige nova estrutura.
+- **Conteúdo por evento:** pools de setor e templates parametrizáveis por evento
+  (config/`events`) sem tocar a lógica do agente.
 - **Subida incremental de integrações:** cada serviço sobe de mock → real trocando
-  uma chave, por ambiente — sem reescrever o orquestrador. Mesma propriedade que
-  já vale para o provider de LLM.
+  uma chave, por ambiente — sem reescrever o orquestrador. Mesma propriedade que já
+  vale para o provider de LLM.
 
 ---
 
-## 12. Riscos & mitigações
+## 16. Riscos & mitigações
 
-- **Mock "Apollo-shaped" desalinhar do mapa real:** mitigado por teste que cruza os
-  valores gerados com as chaves de `_APOLLO_TO_SECTOR`.
+- **Mock "Apollo-shaped" desalinhar do mapa real:** teste anti-drift (§10).
 - **Job simulado órfão se servidor reiniciar na janela:** baixo impacto (job
-  persistido em `scheduled_jobs`; `_reload_pending_jobs()` re-registra pendentes).
+  persistido; `_reload_pending_jobs()` re-registra pendentes).
+- **Pré-requisitos de schema (§12):** verificar antes de rodar a demo em banco limpo.
 - **Honestidade na demo:** toda saída simulada é rotulada (`source="mock"`,
   `status="SIMULATED"`, nota `[SIMULADO]`) — o avaliador sempre distingue real de
   simulado. Documentado no CLAUDE.md.
