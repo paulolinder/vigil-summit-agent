@@ -126,25 +126,38 @@ def _build_regua(
 ) -> str:
     """Returns explicit step-by-step instructions for the current trigger."""
 
+    from app.config import settings
+
     now = datetime.now(timezone.utc)
 
-    # Fallback event date if not found in DB
+    # Fallback da data do evento se não vier do DB (15 Ago 2026 09:00 BRT = 12:00 UTC)
     if not event_date:
-        # Event is 15 Aug 2026 09:00 BRT = 12:00 UTC
         event_date = datetime(2026, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
 
-    # Pre-event schedule anchors
-    t14 = _iso(event_date - timedelta(days=14))
-    t10 = _iso(event_date - timedelta(days=10))
-    t7  = _iso(event_date - timedelta(days=7))
-    t3  = _iso(event_date - timedelta(days=3))
-    t1  = _iso(event_date - timedelta(days=1))
-    t0  = _iso(event_date.replace(hour=6, minute=0))  # 06:00 UTC = 03:00 BRT, entrega às 9h
-
-    # Post-event schedule anchors (relative to now)
-    d3  = _iso(now + timedelta(days=3))
-    d7  = _iso(now + timedelta(days=7))
-    d14 = _iso(now + timedelta(days=14))
+    if settings.demo_fast_forward:
+        # Demo: comprime dias→minutos. A LÓGICA não muda — só a escala de tempo.
+        # Passo de 2 min dá folga sobre o lock de agente (spec §7).
+        t14 = _iso(now + timedelta(minutes=2))
+        t10 = _iso(now + timedelta(minutes=4))
+        t7  = _iso(now + timedelta(minutes=6))
+        t3  = _iso(now + timedelta(minutes=8))
+        t1  = _iso(now + timedelta(minutes=10))
+        t0  = _iso(now + timedelta(minutes=12))
+        d3  = _iso(now + timedelta(minutes=2))
+        d7  = _iso(now + timedelta(minutes=4))
+        d14 = _iso(now + timedelta(minutes=6))
+    else:
+        # Pré-evento: âncoras relativas à data do evento
+        t14 = _iso(event_date - timedelta(days=14))
+        t10 = _iso(event_date - timedelta(days=10))
+        t7  = _iso(event_date - timedelta(days=7))
+        t3  = _iso(event_date - timedelta(days=3))
+        t1  = _iso(event_date - timedelta(days=1))
+        t0  = _iso(event_date.replace(hour=6, minute=0))  # 06:00 UTC = 03:00 BRT
+        # Pós-evento: âncoras relativas a agora
+        d3  = _iso(now + timedelta(days=3))
+        d7  = _iso(now + timedelta(days=7))
+        d14 = _iso(now + timedelta(days=14))
 
     companion_note = (
         ' Mencione o acompanhante: "Confirmamos sua presença e de seu acompanhante."'
