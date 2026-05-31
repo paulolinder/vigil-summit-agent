@@ -46,7 +46,7 @@ async def execute_tool(tool_name: str, tool_input: dict, lead_id: str) -> str:
 
 
 async def _enrich_lead(lead_id: str, sb) -> str:
-    lead = await _db(lambda: sb.table("leads").select("email, name, company").eq("id", lead_id).single().execute().data)
+    lead = await _db(lambda: sb.table("leads").select("email, name, company, role").eq("id", lead_id).single().execute().data)
     if not lead:
         return "Lead não encontrado"
 
