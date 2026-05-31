@@ -11,28 +11,29 @@
 --
 -- `SET search_path = public, pg_temp` is mandatory for SECURITY DEFINER functions: it
 -- prevents a caller from shadowing the tables/operators the body references via a malicious
--- search_path. Bodies are otherwise byte-for-byte the live definitions.
+-- search_path.
 --
--- Idempotent (CREATE OR REPLACE). Safe to re-run.
+-- Bodies are the exact live definitions (from pg_get_functiondef) — ONLY the
+-- SECURITY DEFINER + search_path clauses are added. Idempotent (CREATE OR REPLACE).
 
-CREATE OR REPLACE FUNCTION public.acquire_agent_lock(p_lead_id uuid, p_expires_minutes integer DEFAULT 10)
+CREATE OR REPLACE FUNCTION public.acquire_agent_lock(p_lead_id uuid, p_expires_minutes integer DEFAULT 5)
  RETURNS boolean
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path = public, pg_temp
 AS $function$
+DECLARE
+  rows_affected int;
 BEGIN
-  -- Limpa locks expirados
-  DELETE FROM agent_locks WHERE expires_at < NOW();
+  DELETE FROM agent_locks
+  WHERE lead_id = p_lead_id AND expires_at < now();
 
-  -- Tenta inserir lock (PK garante atomicidade)
-  INSERT INTO agent_locks (lead_id, expires_at)
-  VALUES (p_lead_id, NOW() + (p_expires_minutes || ' minutes')::INTERVAL);
+  INSERT INTO agent_locks (lead_id, locked_at, expires_at)
+  VALUES (p_lead_id, now(), now() + (p_expires_minutes || ' minutes')::interval)
+  ON CONFLICT (lead_id) DO NOTHING;
 
-  RETURN TRUE;
-EXCEPTION
-  WHEN unique_violation THEN
-    RETURN FALSE;
+  GET DIAGNOSTICS rows_affected = ROW_COUNT;
+  RETURN rows_affected > 0;
 END;
 $function$;
 
@@ -43,31 +44,27 @@ CREATE OR REPLACE FUNCTION public.atomic_transition_lead_stage(p_lead_id uuid, p
  SET search_path = public, pg_temp
 AS $function$
 DECLARE
-  v_current_stage TEXT;
-  v_rows_affected INT;
+  rows_affected int;
+  current_stage text;
 BEGIN
-  SELECT stage INTO v_current_stage FROM leads WHERE id = p_lead_id FOR UPDATE;
-
-  IF NOT FOUND THEN
+  SELECT stage INTO current_stage FROM leads WHERE id = p_lead_id;
+  IF current_stage IS NULL THEN
     RETURN 'NOT_FOUND';
   END IF;
-
-  IF v_current_stage = p_target_stage THEN
+  IF current_stage = p_target_stage THEN
     RETURN 'ALREADY_SET';
   END IF;
-
-  IF NOT (v_current_stage = ANY(p_valid_from_stages)) THEN
+  IF NOT (current_stage = ANY(p_valid_from_stages)) THEN
     RETURN 'INVALID_TRANSITION';
   END IF;
-
-  UPDATE leads SET stage = p_target_stage, updated_at = NOW() WHERE id = p_lead_id;
-  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
-
-  IF v_rows_affected = 1 THEN
-    RETURN 'OK';
-  ELSE
-    RETURN 'INVALID_TRANSITION';
+  UPDATE leads
+  SET stage = p_target_stage
+  WHERE id = p_lead_id AND stage = ANY(p_valid_from_stages);
+  GET DIAGNOSTICS rows_affected = ROW_COUNT;
+  IF rows_affected = 0 THEN
+    RETURN 'ALREADY_SET';
   END IF;
+  RETURN 'OK';
 END;
 $function$;
 
@@ -77,23 +74,30 @@ CREATE OR REPLACE FUNCTION public.claim_scheduled_job(p_job_id uuid)
  SECURITY DEFINER
  SET search_path = public, pg_temp
 AS $function$
+DECLARE
+  rows_affected int;
 BEGIN
   UPDATE scheduled_jobs
-  SET status = 'RUNNING', updated_at = NOW()
+  SET status = 'RUNNING', started_at = now()
   WHERE id = p_job_id AND status = 'PENDING';
-
-  RETURN FOUND;
+  GET DIAGNOSTICS rows_affected = ROW_COUNT;
+  RETURN rows_affected > 0;
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.renew_agent_lock(p_lead_id uuid, p_extend_minutes integer DEFAULT 10)
+CREATE OR REPLACE FUNCTION public.renew_agent_lock(p_lead_id uuid, p_extend_minutes integer DEFAULT 3)
  RETURNS boolean
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path = public, pg_temp
 AS $function$
+DECLARE
+  rows_affected int;
 BEGIN
-  UPDATE agent_locks SET expires_at = NOW() + (p_extend_minutes || ' minutes')::INTERVAL WHERE lead_id = p_lead_id;
-  RETURN FOUND;
+  UPDATE agent_locks
+  SET expires_at = now() + (p_extend_minutes || ' minutes')::interval
+  WHERE lead_id = p_lead_id AND expires_at > now();
+  GET DIAGNOSTICS rows_affected = ROW_COUNT;
+  RETURN rows_affected > 0;
 END;
 $function$;
