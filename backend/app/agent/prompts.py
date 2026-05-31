@@ -59,6 +59,7 @@ PERFIL DO LEAD
 ═══════════════════════════════════════════════
 {enrichment_summary_text}
 
+Lead ID       : {lead_id}  ← use EXATAMENTE este valor no campo lead_id de TODA tool
 Stage atual   : {stage}
 Trigger       : {trigger}
 Dias p/ evento: {days_until_event} (15 Ago 2026)
@@ -110,7 +111,8 @@ REGRAS INVIOLÁVEIS
 3. SEMPRE escreva seu raciocínio em texto ANTES de chamar qualquer tool — explique por que esta ação faz sentido para este lead específico
 4. Se enriquecimento falhar, envie welcome com dados básicos e agende a régua normalmente
 5. Um email por execução — verifique check_engagement antes de enviar o próximo
-6. Decisão baseada em dados: opened_at, clicked_at, is_decision_maker e stage definem QUAL template usar"""
+6. Decisão baseada em dados: opened_at, clicked_at, is_decision_maker e stage definem QUAL template usar
+7. Em TODA tool que aceite lead_id, passe EXATAMENTE "{lead_id}" — nunca um placeholder. Você é um agente autônomo: NUNCA peça dados ao usuário, pois não há ninguém para responder."""
 
 
 def _iso(dt: datetime) -> str:
