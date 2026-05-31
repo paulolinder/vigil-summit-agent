@@ -6,8 +6,8 @@
 testar o funil ponta-a-ponta **sem chaves de APIs pagas**. Hoje, sem `APOLLO_API_KEY`
 (e análogos), o funil trava num beco-sem-saída (`"Apollo.io não configurado"`).
 
-> **Histórico:** este spec foi revisado por um code-review contra o código real.
-> Os achados estão incorporados — ver §13 (Achados do review e resoluções).
+> **Histórico:** este spec passou por **duas rodadas** de code-review contra o código
+> real. Todos os achados estão incorporados — ver §13 (Achados do review e resoluções).
 
 ---
 
@@ -66,7 +66,8 @@ Avaliador clica "Check-in" (ATTENDED) ou "No-show" no dashboard
 5. **Régua na demo:** flag `DEMO_FAST_FORWARD` comprime os intervalos (dias → minutos) sem mudar a lógica.
 6. **Fechar o funil:** mock dispara um **webhook simulado** pelo mesmo caminho de transição da produção.
 7. **Fronteira do evento:** a fase pós-evento é disparada pelo avaliador via check-in/no-show no dashboard (reuso dos endpoints existentes; UI a ser fiada).
-8. **Resiliência de lock:** jobs que perdem o lock de agente são re-enfileirados (corrige bug latente de produção e a colisão sob compressão).
+8. **Resiliência de lock:** jobs que perdem o lock de agente são re-enfileirados com **teto de contenção** (corrige bug latente de produção e a colisão sob compressão).
+9. **Branching por engajamento demonstrável:** controle no dashboard que simula abertura/clique de email (seta `opened_at`/`clicked_at`, o mesmo que o webhook do Resend faz), permitindo ao avaliador dirigir o caminho da régua dentro da janela comprimida.
 
 ---
 
@@ -246,6 +247,14 @@ confortável), e a resiliência de lock (§8) cobre o caso residual.
   Só a escala de tempo das âncoras. Offsets exatos são configuráveis (constante
   `_DEMO_OFFSETS`); 2 min é o default seguro.
 
+> **Branching por engajamento na janela comprimida:** os passos com
+> `condition={"skip_if_opened": ...}` / `{"only_if_not_clicked": ...}` e a lógica
+> `opened/clicked` em `WARMUP_T10`/`FOLLOWUP_D7` dependem de `messages.opened_at`/
+> `clicked_at`. Em 2 min, o webhook real do Resend não chega a tempo — então o
+> avaliador usa o controle de **simular abertura/clique** (§9A) para dirigir o
+> caminho antes do passo dependente disparar. Sem isso, a régua sempre cai no ramo
+> "não abriu/não clicou".
+
 ---
 
 ## 8. Resiliência de lock (`scheduler/jobs.py` + `orchestrator.py`)
@@ -255,28 +264,79 @@ quando não adquire o lock; `check_and_run_job` marca o job como `DONE` mesmo se
 executado — **o job é perdido** (vale para produção também).
 
 Correção: `check_and_run_job` detecta o retorno de "lock ocupado" e **re-enfileira**
-o job com delay curto (ex.: 30s) em vez de marcar `DONE`.
+o job com delay curto em vez de marcar `DONE`.
 
 - Mecanismo: `run_agent` passa a sinalizar o caso de lock-ocupado de forma
   inequívoca (ex.: retorno sentinela/flag) para `check_and_run_job` não depender de
   matching de string frágil.
-- Re-enfileira via o mesmo caminho de retry já existente (atualiza `run_at`,
-  `status=PENDING`, `add_job_to_scheduler`), mas com delay fixo curto e **sem**
-  contar como falha/`retry_count` (não é erro — é contenção).
+- Re-enfileira via o mesmo caminho já existente (atualiza `run_at`,
+  `status=PENDING`, `add_job_to_scheduler`), **sem** incrementar `retry_count` (não
+  é erro — é contenção).
+- **Teto de contenção (anti-loop-infinito):** um contador separado
+  `contention_count` (novo campo em `scheduled_jobs`, ou reuso de `error`/metadata)
+  limita as re-tentativas por contenção (ex.: **máx. 5**). Atingido o teto, o job
+  vai para `FAILED` com motivo "lock preso". Isso evita o loop infinito caso o lock
+  fique preso por uma execução travada cujo heartbeat continua renovando.
+- **Delay de re-enfileiramento:** curto o suficiente para a demo (ex.: 30s), mas o
+  teto garante terminação mesmo se o delay for menor que o TTL do lock (5 min).
 
 ---
 
-## 9. Fase 2 no frontend — fiação de check-in/no-show
+## 9. Controles de demo no frontend (`LeadDrawer.tsx`)
 
-**Estado atual:** `lib/api.ts` já tem `checkinLead(lead_id)` e `markNoShow(lead_id)`,
-e os proxies `app/api/leads/[id]/checkin` e `/no-show` existem. Porém essas funções
-**não são chamadas em lugar nenhum** — não há botão na UI.
+### Padrão de atualização: Realtime, NÃO refetch
 
-**Trabalho:** adicionar no `LeadDrawer.tsx` (painel de detalhe do lead) dois botões de
-ação — **"Check-in"** e **"No-show"** — chamando `checkinLead`/`markNoShow`,
-visíveis quando o stage permite a transição (REGISTERED/ENRICHED/CONFIRMED). Após a
-ação, refazer o fetch para refletir o novo stage. Segue o padrão do botão
-`handleRunAgent` já presente no drawer.
+O dashboard é **Realtime-driven**: `FunnelBoard.tsx` (linha ~181) assina
+`postgres_changes` na tabela `leads` via Supabase Realtime e re-renderiza ao receber
+updates. O botão existente `handleRunAgent` (`LeadDrawer.tsx` linha 56–72)
+**dispara a ação e exibe "aguarde o Realtime atualizar o lead" — sem refetch**.
+
+Portanto, todos os controles novos **seguem esse padrão**: disparam a ação e
+deixam o Realtime propagar a mudança de stage / engajamento para o board (e, via
+props, para o drawer). **Não** fazem `getLeads()` manual. (Correção do achado do
+review — a versão anterior do spec dizia "refetch", o que contradiz o padrão real.)
+
+### Autenticação
+
+Todos os proxies operacionais (`/api/leads/[id]/checkin`, `/no-show`, e o novo de
+engajamento) fazem `supabase.auth.getUser()` e retornam **401 sem sessão**. Os
+botões vivem em `app/dashboard`, que já exige login — então funcionam no contexto
+logado. Documentar isso na UI (mensagem de erro clara em 401).
+
+### Botões — Fase 2 (fechar o funil)
+
+`lib/api.ts` já tem `checkinLead(lead_id)` e `markNoShow(lead_id)` e os proxies
+`/checkin` e `/no-show` existem, mas **não são chamados em lugar nenhum**. Adicionar
+no `LeadDrawer.tsx` dois botões — **"Check-in"** e **"No-show"** — visíveis quando o
+stage permite a transição (REGISTERED/ENRICHED/CONFIRMED).
+
+### Botões — simular engajamento (§9A — branching da régua)
+
+Adicionar **"Simular abertura"** e **"Simular clique"**, chamando um novo proxy/endpoint
+(ver §9A) que seta `opened_at`/`clicked_at` na última mensagem OUT/EMAIL do lead —
+o mesmo efeito do webhook do Resend. Permite ao avaliador dirigir o branch da régua
+antes do passo dependente disparar.
+
+---
+
+## 9A. Simular engajamento — endpoint + escrita de dados
+
+Novo endpoint operacional, no padrão de `/checkin` e `/no-show`:
+
+- **Backend** (`api/leads.py`): `POST /api/leads/{id}/simulate-engagement`
+  (`X-API-Key`), corpo `{"opened": bool, "clicked": bool}`. Atualiza a **última**
+  mensagem `direction="OUT", channel="EMAIL"` do lead, setando `opened_at`/
+  `clicked_at = now` conforme o corpo (idempotente; só seta o que ainda é nulo,
+  igual ao webhook do Resend). Não muda stage.
+- **Frontend:** `lib/api.ts` ganha `simulateEngagement(lead_id, {opened, clicked})`;
+  proxy `app/api/leads/[id]/simulate-engagement/route.ts` (auth de sessão, repassa
+  `X-API-Key`), no mesmo molde do proxy `/checkin`.
+- **Semântica:** escreve exatamente os mesmos campos que o webhook real do Resend
+  (`resend_webhook` seta `opened_at`/`clicked_at`). Logo, `check_engagement()` e as
+  `condition` de job (`skip_if_opened`, `only_if_not_clicked`) reagem de forma
+  idêntica ao caminho real — é simulação fiel, não um atalho de lógica.
+- **Rotulagem:** opcional marcar a mensagem como engajamento simulado (ex.: campo/
+  flag) para honestidade na auditoria; mínimo viável é apenas setar os timestamps.
 
 ---
 
@@ -300,7 +360,13 @@ ação, refazer o fetch para refletir o novo stage. Segue o padrão do botão
 - **Webhook real intacto:** `apply_booking_created` extraída produz o mesmo resultado
   que o handler fazia antes; o handler preserva HMAC e 503 sem secret (regressão).
 - **Resiliência de lock:** job cujo `run_agent` retorna "lock ocupado" é re-enfileirado
-  (`status=PENDING`, `run_at` adiado), não marcado `DONE`, e sem incrementar falha.
+  (`status=PENDING`, `run_at` adiado), não marcado `DONE`, e sem incrementar
+  `retry_count`. **Teto:** após N contenções (ex.: 5), o job vai para `FAILED` (sem
+  loop infinito).
+- **Simular engajamento:** `POST /simulate-engagement {opened:true}` seta `opened_at`
+  na última msg OUT/EMAIL; em seguida um job com `condition={"skip_if_opened":true}`
+  é corretamente pulado, e `WARMUP_T10` toma o ramo "abriu". Idempotência: chamar
+  duas vezes não sobrescreve o timestamp já setado.
 - **Fast-forward:** com `demo_fast_forward=True`, `_build_regua("NEW_LEAD_REGISTERED")`
   emite `run_at` em minutos a partir de `now` (passo ~2 min); com `False`, em
   datas-calendário.
@@ -337,6 +403,12 @@ banco-alvo (incl. ambiente limpo) precisa ter aplicado:
 Esses pontos **não são introduzidos por este feature** (o app já grava `status` e já
 usa `RUNNING`), mas são pré-condições para o caminho demo funcionar.
 
+**Nova coluna introduzida por este feature:** o teto de contenção de lock (§8) precisa
+de um contador persistente. Opções: (a) nova coluna `scheduled_jobs.contention_count
+INTEGER DEFAULT 0` (migração nova); ou (b) reuso do campo `error`/metadata existente
+para serializar o contador. Decisão fica para o plano de implementação; (a) é mais
+limpo e testável.
+
 ---
 
 ## 13. Achados do code-review e resoluções
@@ -353,6 +425,16 @@ usa `RUNNING`), mas são pré-condições para o caminho demo funcionar.
 | 8 | 503 do webhook calcom sem secret | Preservado explicitamente na extração (§6) |
 | 11 | `_build_regua` é síncrona e não recebe `settings` | Import interno de `settings`, sem mudar assinatura (§7) |
 
+### Segunda rodada de review (achados novos)
+
+| # | Achado | Resolução |
+|---|---|---|
+| N1 | Re-enfileiramento de lock sem teto → loop infinito | Teto de contenção (máx. ~5) → `FAILED` (§8) |
+| N2 | Padrão real é Realtime, não "refetch" | §9 reescrito: dispara + Realtime atualiza, sem refetch manual |
+| N3 | Botões exigem sessão Supabase Auth | §9 documenta o requisito de login + 401 |
+| N5 | Branching por engajamento não dispara em 2 min | Controle "simular abertura/clique" (§9A) + nota em §7 |
+| N4 | `SIMULATED_BOOKING` em segundos colide com lock do `run_agent` criador? | **Sem problema** — `apply_booking_created` não adquire lock de agente |
+
 ---
 
 ## 14. Arquivos afetados
@@ -366,15 +448,18 @@ usa `RUNNING`), mas são pré-condições para o caminho demo funcionar.
 **Modificar**
 - `backend/app/agent/tool_executor.py` — remove `httpx`; chama as funções de serviço.
 - `backend/app/api/webhooks.py` — extrai `apply_booking_created`; handler real chama-a (mantém HMAC + 503).
-- `backend/app/scheduler/jobs.py` — branch `SIMULATED_BOOKING`; re-enfileirar em contenção de lock.
+- `backend/app/api/leads.py` — novo endpoint `POST /{id}/simulate-engagement` (§9A).
+- `backend/app/scheduler/jobs.py` — branch `SIMULATED_BOOKING`; re-enfileirar em contenção de lock com teto.
 - `backend/app/agent/orchestrator.py` — sinalizar lock-ocupado de forma inequívoca.
 - `backend/app/agent/prompts.py` — fast-forward em `_build_regua()` (import interno de `settings`).
 - `backend/app/config.py` — flag `demo_fast_forward`.
 - `backend/.env.example` — documenta modo demo.
-- `frontend/components/dashboard/LeadDrawer.tsx` — botões Check-in / No-show.
+- `frontend/lib/api.ts` — `simulateEngagement(...)` (checkin/markNoShow já existem).
+- `frontend/app/api/leads/[id]/simulate-engagement/route.ts` (NOVO proxy autenticado).
+- `frontend/components/dashboard/LeadDrawer.tsx` — botões Check-in / No-show / Simular abertura / Simular clique (padrão Realtime, sem refetch).
 - `frontend/components/dashboard/LeadCard.tsx` (ou onde o badge vive) — label/cor para `SIMULATED`.
 - `CLAUDE.md` — documenta a camada `services/`, o modo demo, o mock por ausência de
-  chave, o webhook simulado e a resiliência de lock.
+  chave, o webhook simulado, a resiliência de lock com teto e os controles de demo.
 
 **Não muda**
 - `services/resend_service.py` (email real), `tools.py` (definições de tool),
