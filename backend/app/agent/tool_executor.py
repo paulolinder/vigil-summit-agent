@@ -52,44 +52,15 @@ async def _enrich_lead(lead_id: str, sb) -> str:
     if not lead:
         return "Lead não encontrado"
 
-    if not settings.apollo_api_key:
-        return "Apollo.io não configurado (apollo_api_key ausente)"
-
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://api.apollo.io/api/v1/people/match",
-                headers={"x-api-key": settings.apollo_api_key, "Content-Type": "application/json"},
-                params={"email": lead["email"], "organization_name": lead.get("company")},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-        person = data.get("person") or {}
-        org = person.get("organization") or {}
-        seniority = person.get("seniority", "")
-        is_dm = seniority in {"director", "vp", "c_suite", "owner", "partner", "founder"}
-
-        enrichment = {
-            "lead_id": lead_id,
-            "real_role": person.get("title"),
-            "company": org.get("name") or lead.get("company"),
-            "sector": org.get("industry"),
-            "company_size": str(org.get("estimated_num_employees", "")),
-            "linkedin_url": person.get("linkedin_url"),
-            "is_decision_maker": is_dm,
-            "enrichment_summary": (
-                f"{person.get('title', 'profissional')} na {org.get('name', lead.get('company', ''))}. "
-                f"Setor: {org.get('industry', 'N/A')}. "
-                f"Tamanho: {org.get('estimated_num_employees', 'N/A')} funcionários."
-            ),
-            "source": "apollo",
-        }
+        from app.services.enrichment import enrich_lead_data
+        data = await enrich_lead_data(lead)
+        enrichment = {**data, "lead_id": lead_id}
 
         await _db(lambda: sb.table("lead_enrichment").upsert(enrichment).execute())
-        # Mark ENRICHED via the atomic transition guard (never a plain UPDATE). Only
-        # REGISTERED → ENRICHED is valid; if the lead already advanced, the RPC returns
-        # ALREADY_SET / INVALID_TRANSITION and the stage is correctly left untouched.
+        # Marca ENRICHED via o guard atômico (nunca UPDATE plano). Só REGISTERED→ENRICHED
+        # é válido; se o lead já avançou, o RPC retorna ALREADY_SET/INVALID_TRANSITION
+        # e o stage é corretamente preservado.
         await _db(lambda: sb.rpc("atomic_transition_lead_stage", {
             "p_lead_id": lead_id,
             "p_target_stage": "ENRICHED",
