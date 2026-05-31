@@ -7,8 +7,9 @@ import FunnelChart from './FunnelChart'
 import ActivityFeed from './ActivityFeed'
 import FilterBar from './FilterBar'
 import LeadDrawer from './LeadDrawer'
-import type { RichLead, LeadEnrichment, LastMessage, BaseLead, Message, ActivityEvent } from '@/lib/types'
+import type { RichLead, LeadEnrichment, LastMessage, BaseLead, Message, ActivityEvent, EventConfig } from '@/lib/types'
 import ConfigPanel from './ConfigPanel'
+import { formatEventDate } from '@/lib/format'
 
 const STAGES = [
   { key: 'REGISTERED',        label: 'Inscritos',        color: 'border-brand-teal',    titleColor: 'text-brand-teal'   },
@@ -87,6 +88,22 @@ export default function FunnelBoard() {
   const [allMessages, setAllMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [eventCapacity, setEventCapacity] = useState<number>(120)
+  const [eventDateLabel, setEventDateLabel] = useState<string>('')
+
+  // Load event config (capacity + date) so the KPI strip and badges reflect the DB
+  // instead of hardcoded values. Falls back to defaults if the request fails.
+  useEffect(() => {
+    fetch('/api/events', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : []))
+      .then((data: EventConfig[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setEventCapacity(data[0].capacity ?? 120)
+          setEventDateLabel(formatEventDate(data[0].event_date))
+        }
+      })
+      .catch(() => {/* keep defaults */})
+  }, [])
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -299,7 +316,7 @@ export default function FunnelBoard() {
           {
             label: 'Total inscritos',
             value: String(total),
-            sub: 'de 120 vagas',
+            sub: `de ${eventCapacity} vagas`,
             meta: null as string | null,
             metaColor: '',
             valueColor: 'text-brand-teal',
@@ -402,7 +419,7 @@ export default function FunnelBoard() {
                 </p>
               </div>
               <div className="bg-white border border-brand-border rounded-[10px] px-3 py-1.5 text-brand-muted text-xs font-semibold">
-                📅 Vigil Summit · 15 Ago 2026
+                📅 Vigil Summit · {eventDateLabel || '15 Ago 2026'}
               </div>
             </div>
 
@@ -424,7 +441,7 @@ export default function FunnelBoard() {
                     <div className="bg-white border border-brand-border rounded-b-[10px] p-2 flex-1 min-h-[100px]">
                       {stageLeads.length === 0 ? (
                         <p className="text-brand-border text-xs text-center pt-6">
-                          {key === 'ATTENDED' ? 'Dia do evento · 15 Ago' : '—'}
+                          {key === 'ATTENDED' ? `Dia do evento · ${eventDateLabel || '15 Ago 2026'}` : '—'}
                         </p>
                       ) : (
                         stageLeads.map(lead => (

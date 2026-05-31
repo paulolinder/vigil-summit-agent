@@ -75,7 +75,7 @@ export default function ChatbotWidget() {
             if (parsed.error) {
               setMessages(prev => [
                 ...prev.slice(0, -1),
-                { role: 'assistant', content: 'Desculpe, ocorreu um erro. Tente novamente.' },
+                { role: 'assistant', content: 'Assistente temporariamente indisponível.' },
               ])
               break
             }
