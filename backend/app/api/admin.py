@@ -18,14 +18,32 @@ def _env_status(key: str) -> str:
     return "ok" if key else "warn"
 
 
-async def _ping_anthropic() -> str:
+async def _ping_llm() -> tuple[str, str, str]:
+    """Returns (status, service_name, detail) for the active LLM provider."""
+    from app.llm.provider import detect_provider
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        await client.models.list()
-        return "ok"
-    except Exception:
-        return "error"
+        provider = detect_provider()
+    except RuntimeError:
+        return "warn", "LLM", "Nenhum provedor configurado"
+
+    if provider == "anthropic":
+        name, detail = "Claude (Anthropic)", "claude-sonnet-4-6"
+        try:
+            import anthropic
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            await client.models.list()
+            return "ok", name, detail
+        except Exception:
+            return "error", name, detail
+    else:
+        name, detail = "OpenAI", settings.openai_agent_model
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            await client.models.list()
+            return "ok", name, detail
+        except Exception:
+            return "error", name, detail
 
 
 async def _ping_resend() -> tuple[str, str]:
@@ -91,12 +109,24 @@ async def _ping_evolution() -> str:
 
 
 def _build_services_config_only() -> list[dict]:
+    from app.llm.provider import detect_provider
+    try:
+        _llm_provider = detect_provider()
+    except RuntimeError:
+        _llm_provider = None
+    if _llm_provider == "anthropic":
+        _llm_name, _llm_detail = "Claude (Anthropic)", "claude-sonnet-4-6"
+    elif _llm_provider == "openai":
+        _llm_name, _llm_detail = "OpenAI", settings.openai_agent_model
+    else:
+        _llm_name, _llm_detail = "LLM", "nenhum provedor configurado"
+    _llm_status = "ok" if _llm_provider else "warn"
     return [
         {
-            "name": "Claude (Anthropic)",
+            "name": _llm_name,
             "role": "Orquestrador do agente",
-            "status": _env_status(settings.anthropic_api_key),
-            "detail": "claude-sonnet-4-6" if settings.anthropic_api_key else "ANTHROPIC_API_KEY ausente",
+            "status": _llm_status,
+            "detail": _llm_detail,
         },
         {
             "name": "Resend",
@@ -132,16 +162,17 @@ def _build_services_config_only() -> list[dict]:
 
 
 async def _build_services_live() -> list[dict]:
-    anthropic_s, resend_result, apollo_s, cal_s, evolution_s = await asyncio.gather(
-        _ping_anthropic(),
+    llm_result, resend_result, apollo_s, cal_s, evolution_s = await asyncio.gather(
+        _ping_llm(),
         _ping_resend(),
         _ping_apollo(),
         _ping_cal(),
         _ping_evolution(),
     )
+    llm_s, llm_name, llm_detail = llm_result
     resend_s, resend_detail = resend_result
     return [
-        {"name": "Claude (Anthropic)", "role": "Orquestrador do agente", "status": anthropic_s, "detail": "claude-sonnet-4-6"},
+        {"name": llm_name, "role": "Orquestrador do agente", "status": llm_s, "detail": llm_detail},
         {"name": "Resend", "role": "Envio de emails", "status": resend_s, "detail": resend_detail},
         {"name": "Apollo.io", "role": "Enriquecimento de leads", "status": apollo_s, "detail": "people/match API"},
         {"name": "Cal.com", "role": "Agendamento de reuniões", "status": cal_s, "detail": f"event type {settings.cal_event_type_id}"},
