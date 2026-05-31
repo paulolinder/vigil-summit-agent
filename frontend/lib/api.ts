@@ -54,3 +54,16 @@ export async function markNoShow(lead_id: string) {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+export async function simulateEngagement(
+  lead_id: string,
+  opts: { opened?: boolean; clicked?: boolean }
+) {
+  const res = await fetch(`/api/leads/${lead_id}/simulate-engagement`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
