@@ -25,3 +25,28 @@ async def test_apply_booking_created_transitions_each_lead():
         assert fn == "atomic_transition_lead_stage"
         assert params["p_target_stage"] == "MEETING_SCHEDULED"
         assert params["p_valid_from_stages"] == ["ATTENDED", "NO_SHOW"]
+
+
+@pytest.mark.asyncio
+async def test_generate_meeting_link_mock_inserts_simulated_booking():
+    from app.config import settings
+    from app.services.meeting import generate_meeting_link
+
+    sb = MagicMock()
+    inserted = {}
+    def capture_insert(row):
+        inserted.update(row)
+        return MagicMock(execute=MagicMock(return_value=MagicMock(data=[{"id": "job-xyz"}])))
+    sb.table.return_value.insert.side_effect = capture_insert
+
+    with patch.object(settings, "cal_api_key", ""), \
+         patch.object(settings, "cal_event_type_id", ""), \
+         patch("app.services.meeting.get_supabase", return_value=sb), \
+         patch("app.scheduler.runner.add_job_to_scheduler") as mock_add:
+        out = await generate_meeting_link({"id": "lead-1", "name": "Ana", "email": "ana@x.com"})
+
+    assert "SIMULADO" in out["note"]
+    assert out["booking_link"].startswith("https://cal.com/")
+    assert inserted["job_type"] == "SIMULATED_BOOKING"
+    assert inserted["status"] == "PENDING"
+    mock_add.assert_called_once()

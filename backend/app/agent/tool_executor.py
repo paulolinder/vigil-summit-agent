@@ -1,8 +1,6 @@
 import asyncio
 import json
-import httpx
 from datetime import datetime, timezone
-from urllib.parse import urlencode
 
 from app.db.client import get_supabase
 from app.config import settings
@@ -219,39 +217,19 @@ async def _schedule_job(tool_input: dict, sb) -> str:
 
 async def _schedule_meeting(tool_input: dict, sb) -> str:
     lead_id = tool_input["lead_id"]
-    context_note = tool_input.get("context_note", "")
 
-    lead = await _db(lambda: sb.table("leads").select("name, email, stage").eq("id", lead_id).single().execute().data)
+    lead = await _db(lambda: sb.table("leads").select("id, name, email, stage, event_id").eq("id", lead_id).single().execute().data)
     if not lead:
         return "Lead não encontrado"
 
-    if not settings.cal_api_key or not settings.cal_event_type_id:
-        return "Cal.com não configurado (cal_api_key ou cal_event_type_id ausentes)"
-
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                f"https://api.cal.com/v1/event-types/{settings.cal_event_type_id}",
-                headers={"Authorization": f"Bearer {settings.cal_api_key}"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-        event_type = data.get("event_type", {})
-        slug = event_type.get("slug", "demo-vigil")
-        username = (event_type.get("team") or {}).get("slug", "vigil")
-        booking_link = (
-            f"https://cal.com/{username}/{slug}"
-            f"?{urlencode({'name': lead['name'], 'email': lead['email']})}"
-        )
-
-        # Stage is intentionally NOT updated here.
-        # MEETING_SCHEDULED is set only by /webhooks/calcom when the attendee
-        # completes a real booking in Cal.com.
-
+        from app.services.meeting import generate_meeting_link
+        result = await generate_meeting_link(lead)
+        # Stage NÃO é alterado aqui. MEETING_SCHEDULED é setado por apply_booking_created
+        # (webhook real do Cal.com OU booking simulado), origens ATTENDED/NO_SHOW.
         return (
-            f"Link de agendamento gerado: {booking_link}. "
-            f"Stage permanece '{lead['stage']}' até confirmação real no Cal.com."
+            f"Link de agendamento gerado: {result['booking_link']}. {result['note']} "
+            f"Stage permanece '{lead['stage']}' até a confirmação."
         )
     except Exception as e:
-        return f"Erro Cal.com: {e}"
+        return f"Erro ao gerar link de agendamento: {e}"
