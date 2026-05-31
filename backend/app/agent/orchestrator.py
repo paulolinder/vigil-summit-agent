@@ -1,24 +1,13 @@
 # backend/app/agent/orchestrator.py
 import asyncio
-import anthropic
-from datetime import datetime, timezone
 
-from app.config import settings
 from app.agent.tools import TOOLS
 from app.agent.tool_executor import execute_tool
 from app.agent.prompts import build_system_prompt
 from app.agent.memory import save_memory
 from app.agent.lock_manager import acquire_lock, release_lock, heartbeat_loop
+from app.llm.provider import get_adapter
 from app.db.client import get_supabase
-
-_client: anthropic.AsyncAnthropic | None = None
-
-
-def _get_client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _client
 
 
 async def run_agent(lead_id: str, trigger: str) -> str:
@@ -46,9 +35,10 @@ async def run_agent(lead_id: str, trigger: str) -> str:
         if isinstance(enrichment, list):
             lead["lead_enrichment"] = enrichment[0] if enrichment else {}
 
-        client = _get_client()
+        adapter = get_adapter()
         system = await build_system_prompt(lead, trigger)
-        messages = [{"role": "user", "content": f"Trigger recebido: {trigger}. Avalie o estado e tome a ação mais adequada."}]
+        user_text = f"Trigger recebido: {trigger}. Avalie o estado e tome a ação mais adequada."
+        messages = adapter.init_messages(system, user_text)
 
         await save_memory(lead_id, "user", f"Trigger: {trigger}")
 
@@ -57,40 +47,21 @@ async def run_agent(lead_id: str, trigger: str) -> str:
 
         while iteration < max_iterations:
             iteration += 1
-            response = await client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                system=system,
-                tools=TOOLS,
-                messages=messages,
-            )
+            turn = await adapter.create_turn(system, messages, TOOLS, max_tokens=4096)
 
-            assistant_text = ""
-            tool_uses = []
+            if turn.text:
+                await save_memory(lead_id, "assistant", turn.text, turn.tool_calls or None)
 
-            for block in response.content:
-                if block.type == "text":
-                    assistant_text = block.text
-                elif block.type == "tool_use":
-                    tool_uses.append(block)
-
-            if assistant_text:
-                await save_memory(lead_id, "assistant", assistant_text, tool_uses or None)
-
-            if response.stop_reason == "end_turn":
+            if turn.stop_reason == "end_turn":
                 break
 
-            if response.stop_reason == "tool_use" and tool_uses:
-                messages.append({"role": "assistant", "content": response.content})
-                tool_results = []
-                for tool_use in tool_uses:
-                    result = await execute_tool(tool_use.name, tool_use.input, lead_id)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": result,
-                    })
-                messages.append({"role": "user", "content": tool_results})
+            if turn.stop_reason == "tool_use" and turn.tool_calls:
+                adapter.append_assistant(messages, turn)
+                results: list[tuple[str, str]] = []
+                for tc in turn.tool_calls:
+                    result = await execute_tool(tc.name, tc.input, lead_id)
+                    results.append((tc.id, result))
+                adapter.append_tool_results(messages, results)
             else:
                 break
 
