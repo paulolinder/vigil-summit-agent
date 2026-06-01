@@ -122,6 +122,11 @@ export default function FunnelBoard() {
     async function loadLeads() {
       try {
         const r = await fetch('/api/leads', { cache: 'no-store' })
+        // Sessão expirada: redireciona pro login (a navegação desmonta e para o poll).
+        if (r.status === 401) {
+          if (!cancelled) window.location.href = '/login'
+          return
+        }
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         const response: { data: ProxyLead[] } | ProxyLead[] = await r.json()
         const fetched: ProxyLead[] = Array.isArray(response)

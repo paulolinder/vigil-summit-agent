@@ -38,7 +38,9 @@ export async function getLeads(event_id?: string, limit = 100, offset = 0) {
 }
 
 export async function getEvents() {
-  const res = await fetch(`${API_URL}/api/events/`)
+  // no-store: o form de inscrição precisa do event_id atual — sem isso o Next/Vercel
+  // pode servir um event_id stale e a inscrição referenciaria o evento errado.
+  const res = await fetch(`${API_URL}/api/events/`, { cache: 'no-store' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }

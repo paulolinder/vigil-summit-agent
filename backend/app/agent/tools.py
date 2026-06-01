@@ -108,7 +108,7 @@ TOOLS = [
     },
     {
         "name": "schedule_meeting",
-        "description": "Gera link de agendamento Cal.com e atualiza stage para MEETING_SCHEDULED.",
+        "description": "Gera o link de agendamento Cal.com e o entrega ao lead. NÃO altera o stage — MEETING_SCHEDULED é definido só quando a reunião é de fato confirmada (webhook do Cal.com ou booking simulado).",
         "input_schema": {
             "type": "object",
             "properties": {
