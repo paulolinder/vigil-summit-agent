@@ -1,21 +1,24 @@
 import asyncio
-from fastapi import APIRouter, HTTPException, Security
+from fastapi import APIRouter, HTTPException, Security, Request
 from app.db.client import get_supabase
 from app.db.models import EventUpdate
 from app.api.auth import require_api_key as _require_api_key
+from app.limiter import limiter
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 
 @router.get("/")
-def list_events():
+@limiter.limit("30/minute")
+def list_events(request: Request):
     sb = get_supabase()
     result = sb.table("events").select("*").order("event_date").execute()
     return result.data
 
 
 @router.get("/{event_id}")
-def get_event(event_id: str):
+@limiter.limit("30/minute")
+def get_event(event_id: str, request: Request):
     sb = get_supabase()
     try:
         result = sb.table("events").select("*").eq("id", event_id).single().execute()

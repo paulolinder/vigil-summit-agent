@@ -47,10 +47,14 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 
 @router.post("/", status_code=201)
 @limiter.limit("10/minute")
-def create_lead(lead_data: LeadCreate, request: Request, background_tasks: BackgroundTasks):
+async def create_lead(lead_data: LeadCreate, request: Request, background_tasks: BackgroundTasks):
     sb = get_supabase()
 
-    event_check = sb.table("events").select("id").eq("id", lead_data.event_id).single().execute()
+    # I/O do Supabase em thread pool — consistente com os demais handlers async;
+    # evita bloquear o event loop (handler síncrono fazia a chamada na thread do worker).
+    event_check = await asyncio.to_thread(
+        lambda: sb.table("events").select("id").eq("id", lead_data.event_id).single().execute()
+    )
     if not event_check.data:
         raise HTTPException(status_code=404, detail="Evento não encontrado")
 
@@ -65,7 +69,7 @@ def create_lead(lead_data: LeadCreate, request: Request, background_tasks: Backg
         data["whatsapp_consent_at"] = data["consent_at"]
 
     try:
-        result = sb.table("leads").insert(data).execute()
+        result = await asyncio.to_thread(lambda: sb.table("leads").insert(data).execute())
         lead = result.data[0]
     except Exception as e:
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():

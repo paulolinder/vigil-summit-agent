@@ -42,7 +42,10 @@ async def _reload_pending_jobs() -> None:
             sb.table("scheduled_jobs")
             .update({
                 "status": "PENDING",
-                "error": f"Recovered: stuck in RUNNING for >30min (worker crash assumed)",
+                # Zera contention_count: recuperação de crash NÃO é contenção de lock,
+                # então não deve consumir o teto MAX_CONTENTION de re-enfileiramento.
+                "contention_count": 0,
+                "error": "Recovered: stuck in RUNNING for >30min (worker crash assumed)",
             })
             .eq("id", jid)
             .execute()
