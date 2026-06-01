@@ -173,6 +173,54 @@ TEMPLATE_BODIES_HTML: dict[str, str] = {
         f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
         f'<p style="{_P}">{{custom_note}}</p>'
     ),
+
+    "vip_briefing": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Preparei um briefing exclusivo para os executivos de segurança confirmados no Vigil Summit.</p>'
+        f'<p style="{_P}">Como {{role}}, você lidera decisões que impactam diretamente o que discutiremos no dia 15.</p>'
+        f'<p style="{_EYEBROW}">O que está em pauta para o seu setor</p>'
+        f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
+        f'<p style="{_P}">Reservamos um espaço exclusivo para decisores — uma conversa direta com o time técnico '
+        f'da Vigil.AI sobre casos reais de implementação.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "agenda": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">O Vigil Summit acontece em <strong>3 dias</strong>. Selecionei as sessões mais relevantes '
+        f'para o seu perfil:</p>'
+        f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+        f'<p style="{_EYEBROW}">Programação</p>'
+        f'<ul style="margin:0 0 16px;padding-left:20px;">'
+        f'<li style="margin-bottom:6px;">8h30 — Credenciamento e café</li>'
+        f'<li style="margin-bottom:6px;">9h00 — Abertura: IA e o novo perímetro de segurança</li>'
+        f'<li style="margin-bottom:6px;">10h30 — Tracks: Zero Trust · IA em Segurança · Conformidade</li>'
+        f'<li style="margin-bottom:6px;">12h30 — Almoço executivo</li>'
+        f'<li style="margin-bottom:6px;">14h00 — Mesas redondas por setor</li>'
+        f'<li style="margin-bottom:6px;">16h30 — Encerramento e networking</li>'
+        f'</ul>'
+    ),
+
+    "logistics": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}"><strong>Amanhã é o dia.</strong> Aqui estão as informações de acesso:</p>'
+        f'<ul style="margin:0 0 16px;padding-left:20px;">'
+        f'<li style="margin-bottom:6px;">📍 Centro de Convenções Rebouças — Av. Dr. Enéas de Carvalho Aguiar, 23, Pinheiros, São Paulo</li>'
+        f'<li style="margin-bottom:6px;">🕘 Credenciamento 8h30 · Início 9h00</li>'
+        f'<li style="margin-bottom:6px;">🎫 Leve documento com foto</li>'
+        f'<li style="margin-bottom:6px;">🚗 Estacionamento validado no local</li>'
+        f'<li style="margin-bottom:6px;">🍽️ Almoço incluído para confirmados</li>'
+        f'</ul>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "day_reminder": (
+        f'<p style="{_P}">Bom dia, <strong>{{name}}</strong>!</p>'
+        f'<p style="{_P}">O Vigil Summit começa <strong>hoje</strong>. Credenciamento a partir das 8h30 no '
+        f'Centro de Convenções Rebouças.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
 }
 
 
