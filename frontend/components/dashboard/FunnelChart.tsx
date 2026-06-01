@@ -44,8 +44,10 @@ export default function FunnelChart({ leads }: { leads: BaseLead[] }) {
           const seqIdx = SEQ.indexOf(stage.key)
           const prevKey = seqIdx > 0 ? SEQ[seqIdx - 1] : null
           const prevCount = prevKey ? leads.filter(l => l.stage === prevKey).length : null
+          // cap em 100%: um estágio pode ter count > prevCount se um lead pulou etapa
+          // (ex. REGISTERED→CONFIRMED sem passar por ENRICHED), o que daria rate > 100.
           const rate = prevCount && prevCount > 0
-            ? Math.round((stage.count / prevCount) * 100)
+            ? Math.min(Math.round((stage.count / prevCount) * 100), 100)
             : null
           const pct = Math.round((stage.count / max) * 100)
 
