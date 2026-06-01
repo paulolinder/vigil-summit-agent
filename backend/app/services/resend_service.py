@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import resend
 from app.config import settings
 from app.db.client import get_supabase
@@ -486,9 +487,11 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
     body = template["body"].format(**ctx)
 
     # HTML é best-effort: se render falhar, envia só texto (nunca bloqueia o envio).
+    # Loga a falha — senão um template quebrado degradaria todos os emails p/ texto sem sinal.
     try:
         html_body = render_html(template_key, ctx, cta_url)
-    except Exception:
+    except Exception as e:
+        logging.getLogger(__name__).warning("Falha ao renderizar HTML do template %s: %s", template_key, e)
         html_body = None
 
     sb = get_supabase()
