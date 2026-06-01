@@ -151,6 +151,8 @@ async def _send_followup(tool_input: dict, sb) -> str:
     if isinstance(enrichment, list):
         lead["lead_enrichment"] = enrichment[0] if enrichment else {}
 
+    # MVP: o link do Cal.com vai no custom_note (texto). O botão "Agendar" do email HTML
+    # cai no fallback landing (cta_url=None). Wire estruturado agente→botão = melhoria futura.
     result = await send_email(lead, template, custom_note, phase="post_event")
     if "error" in result:
         return f"Erro ao enviar followup: {result['error']}"
