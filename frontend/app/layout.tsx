@@ -1,12 +1,9 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+// Inter self-hospedada via npm (fontsource) em vez de next/font/google: evita o fetch
+// ao Google Fonts em build time, que falha em builds Docker sem rede de saída (Dokploy).
+// A var --font-inter (consumida pelo tailwind fontFamily.sans) é definida em globals.css.
+import '@fontsource-variable/inter'
 import './globals.css'
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
 
 export const metadata: Metadata = {
   title: 'Vigil Summit — Segurança para a Era da IA',
@@ -16,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.variable} bg-brand-bg text-brand-text antialiased`}>
+      <body className="bg-brand-bg text-brand-text antialiased">
         {children}
       </body>
     </html>

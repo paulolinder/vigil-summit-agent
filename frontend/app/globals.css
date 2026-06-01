@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Inter self-hospedada (@fontsource-variable/inter, importada no layout). A família
+   'Inter Variable' alimenta --font-inter, consumida por tailwind fontFamily.sans. */
+:root {
+  --font-inter: 'Inter Variable', system-ui, sans-serif;
+}
