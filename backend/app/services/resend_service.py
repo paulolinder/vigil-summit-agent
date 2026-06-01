@@ -2,6 +2,7 @@ import asyncio
 import resend
 from app.config import settings
 from app.db.client import get_supabase
+from app.services.email_templates import render_html
 from datetime import datetime, timezone
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -426,7 +427,7 @@ def _resolve_sector_content(sector: str | None) -> str:
     return default
 
 
-async def send_email(lead: dict, template_key: str, custom_note: str = "", phase: str = "pre_event") -> dict:
+async def send_email(lead: dict, template_key: str, custom_note: str = "", phase: str = "pre_event", cta_url: str | None = None) -> dict:
     resend.api_key = settings.resend_api_key
 
     enrichment = lead.get("lead_enrichment") or {}
@@ -484,6 +485,12 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
     subject = template["subject"].format(**ctx)
     body = template["body"].format(**ctx)
 
+    # HTML é best-effort: se render falhar, envia só texto (nunca bloqueia o envio).
+    try:
+        html_body = render_html(template_key, ctx, cta_url)
+    except Exception:
+        html_body = None
+
     sb = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
 
@@ -509,6 +516,8 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
             "subject": subject,
             "text": body,
         }
+        if html_body:
+            payload["html"] = html_body
         response = await asyncio.to_thread(lambda: resend.Emails.send(payload))
 
         await asyncio.to_thread(lambda: sb.table("messages").update({
