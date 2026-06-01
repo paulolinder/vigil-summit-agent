@@ -220,6 +220,12 @@ def test_deletion_confirm_anonymizes_with_valid_token(client, mock_supabase):
     assert resp.status_code == 200
     assert resp.json()["status"] == "anonymized"
 
+    # LGPD: a anonimização do enrichment deve limpar também os dados derivados.
+    update_calls = str(mock_supabase.return_value.table.return_value.update.call_args_list)
+    assert "company_size" in update_calls
+    assert "is_decision_maker" in update_calls
+    assert "source" in update_calls
+
 
 def test_deletion_confirm_rejects_expired_or_invalid_token(client, mock_supabase):
     """Expired/invalid token returns 404."""

@@ -35,13 +35,26 @@ async def cleanup_terminal_jobs() -> int:
 
 
 async def cleanup_used_deletion_tokens() -> int:
-    """Delete used or expired deletion tokens older than 48 hours."""
+    """Remove tokens de exclusão para minimizar a janela em que o email (plaintext) fica
+    armazenado. Dois critérios:
+      1. tokens já USADOS (used_at preenchido) — não podem ser reusados, então saem 1h após o uso;
+      2. tokens EXPIRADOS (expires_at < agora) — a janela útil de 24h já passou.
+    NOTA: o email é guardado em plaintext porque o confirm precisa dele para achar os leads
+    a anonimizar. Hash-at-rest exigiria refatorar o lookup do confirm — follow-up futuro.
+    """
     sb = get_supabase()
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
-    result = await _db(
-        lambda: sb.table("deletion_tokens").delete().lt("expires_at", cutoff).execute()
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    used_cutoff = (now - timedelta(hours=1)).isoformat()
+
+    used = await _db(
+        lambda: sb.table("deletion_tokens").delete()
+        .not_("used_at", "is", "null").lt("used_at", used_cutoff).execute()
     )
-    return len(result.data) if result.data else 0
+    expired = await _db(
+        lambda: sb.table("deletion_tokens").delete().lt("expires_at", now_iso).execute()
+    )
+    return (len(used.data) if used.data else 0) + (len(expired.data) if expired.data else 0)
 
 
 async def run_all_cleanups() -> None:

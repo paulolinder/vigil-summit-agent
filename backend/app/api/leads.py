@@ -295,6 +295,9 @@ async def deletion_confirm(request: Request, payload: dict):
         await asyncio.to_thread(lambda lid=lead_id: sb.table("lead_enrichment").update({
             "real_role": None, "company": None, "sector": None,
             "linkedin_url": None, "security_signals": None, "enrichment_summary": None,
+            # Dados derivados também são pessoais sob LGPD (direito de erasure abrange
+            # o perfil inferido e a fonte do enriquecimento).
+            "company_size": None, "is_decision_maker": None, "source": None,
         }).eq("lead_id", lid).execute())
 
         await asyncio.to_thread(lambda lid=lead_id: sb.table("messages").update(
