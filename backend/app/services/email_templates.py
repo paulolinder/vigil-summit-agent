@@ -7,6 +7,8 @@ continua em resend_service.TEMPLATES; este módulo só cuida do HTML.
 """
 import html as _html
 
+from app.config import settings
+
 # Paleta Vigil (tailwind.config.ts)
 _NAVY = "#0F2A34"
 _TEAL = "#48C2C5"
@@ -94,8 +96,6 @@ Vigil Summit — 15 de agosto de 2026 · São Paulo<br>
 </table>
 </body></html>"""
 
-
-from app.config import settings  # noqa: E402
 
 # {template_key: {"label": str, "variant": "primary"|"secondary", "dest": "landing"|"calcom"}}
 # Templates sem botão NÃO aparecem aqui.
