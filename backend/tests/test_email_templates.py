@@ -51,9 +51,12 @@ def _min_ctx():
 
 
 def test_render_landing_cta_uses_frontend_url(monkeypatch):
-    from app.config import settings
+    # Patch o settings que o módulo sob teste REALMENTE usa (email_templates.settings),
+    # não app.config.settings — test_config_validator faz importlib.reload(app.config),
+    # criando um novo objeto; render_html lê a referência presa no import deste módulo.
+    from app.services import email_templates
     from app.services.email_templates import render_html
-    monkeypatch.setattr(settings, "frontend_url", "https://summit.vigil.ai")
+    monkeypatch.setattr(email_templates.settings, "frontend_url", "https://summit.vigil.ai")
     html = render_html("welcome", _min_ctx())
     assert "https://summit.vigil.ai" in html
     assert "Confirmar presença" in html
@@ -67,17 +70,17 @@ def test_render_calcom_cta_uses_cta_url():
 
 
 def test_render_calcom_without_url_falls_back_to_landing(monkeypatch):
-    from app.config import settings
+    from app.services import email_templates
     from app.services.email_templates import render_html
-    monkeypatch.setattr(settings, "frontend_url", "https://summit.vigil.ai")
+    monkeypatch.setattr(email_templates.settings, "frontend_url", "https://summit.vigil.ai")
     html = render_html("thank_you", _min_ctx(), cta_url=None)
     assert "https://summit.vigil.ai" in html
 
 
 def test_render_invalid_cta_url_falls_back(monkeypatch):
-    from app.config import settings
+    from app.services import email_templates
     from app.services.email_templates import render_html
-    monkeypatch.setattr(settings, "frontend_url", "https://summit.vigil.ai")
+    monkeypatch.setattr(email_templates.settings, "frontend_url", "https://summit.vigil.ai")
     html = render_html("thank_you", _min_ctx(), cta_url="javascript:alert(1)")
     assert "javascript:" not in html
     assert "https://summit.vigil.ai" in html
