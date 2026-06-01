@@ -93,3 +93,56 @@ Vigil Summit — 15 de agosto de 2026 · São Paulo<br>
 </td></tr>
 </table>
 </body></html>"""
+
+
+from app.config import settings  # noqa: E402
+
+# {template_key: {"label": str, "variant": "primary"|"secondary", "dest": "landing"|"calcom"}}
+# Templates sem botão NÃO aparecem aqui.
+CTA_MAP: dict[str, dict] = {
+    "welcome":               {"label": "Confirmar presença",          "variant": "secondary", "dest": "landing"},
+    "confirmation_request":  {"label": "Confirmar minha vaga",        "variant": "secondary", "dest": "landing"},
+    "confirmation_followup": {"label": "Confirmar antes que feche",   "variant": "secondary", "dest": "landing"},
+    "warmup":                {"label": "Ver a agenda",                "variant": "primary",   "dest": "landing"},
+    "vip_briefing":          {"label": "Ver a agenda",                "variant": "primary",   "dest": "landing"},
+    "agenda":                {"label": "Ver programação completa",    "variant": "primary",   "dest": "landing"},
+    "thank_you":             {"label": "Agendar conversa",            "variant": "primary",   "dest": "calcom"},
+    "demo_followup":         {"label": "Agendar demonstração",        "variant": "secondary", "dest": "calcom"},
+    "no_show_missed":        {"label": "Quero a sessão privada",      "variant": "secondary", "dest": "calcom"},
+    "no_show_demo_offer":    {"label": "Agendar demo privada",        "variant": "secondary", "dest": "calcom"},
+    "no_show_final":         {"label": "Agendar (último convite)",    "variant": "primary",   "dest": "calcom"},
+}
+# Sem botão: logistics, day_reminder, pain_point, breakup.
+
+
+def _resolve_cta(template_key: str, cta_url: str | None) -> dict | None:
+    spec = CTA_MAP.get(template_key)
+    if not spec:
+        return None
+    if spec["dest"] == "calcom" and cta_url and cta_url.startswith(("http://", "https://")):
+        url = cta_url
+    else:
+        url = settings.frontend_url
+    return {"label": spec["label"], "url": url, "variant": spec["variant"]}
+
+
+# Preenchido nas Tasks 3-5 (miolos HTML). Mantido aqui para import estável.
+TEMPLATE_BODIES_HTML: dict[str, str] = {}
+
+
+def render_html(template_key: str, ctx: dict, cta_url: str | None = None) -> str:
+    """Monta o email HTML completo: escape do ctx → miolo → shell com CTA + chip."""
+    escaped = {k: _esc(v) for k, v in ctx.items()}
+    # event_highlights vira lista visual (split por linha, DEPOIS do escape)
+    if "event_highlights" in escaped:
+        lines = [ln.strip().lstrip("→").strip() for ln in escaped["event_highlights"].split("\n") if ln.strip()]
+        escaped["event_highlights"] = "".join(
+            f'<li style="margin-bottom:6px;">{ln}</li>' for ln in lines
+        )
+    inner_tpl = TEMPLATE_BODIES_HTML.get(template_key, "<p>{custom_note}</p>")
+    inner = inner_tpl.format(**escaped)
+    cta = _resolve_cta(template_key, cta_url)
+    # _perso_chip recebe o ctx CRU (não-escapado) de propósito: ele já aplica _esc
+    # internamente. NÃO passe `escaped` aqui (evita escape duplo).
+    chip = _perso_chip(ctx.get("role"), ctx.get("sector"))
+    return _shell(inner, cta, chip)
