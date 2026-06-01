@@ -53,8 +53,10 @@ async def run_agent(lead_id: str, trigger: str) -> str:
             iteration += 1
             turn = await adapter.create_turn(system, messages, TOOLS, max_tokens=4096)
 
-            if turn.text:
-                await save_memory(lead_id, "assistant", turn.text, turn.tool_calls or None)
+            # Salva memória se há texto OU tool calls — um turno tool-only (texto vazio)
+            # também precisa de registro de auditoria do que o agente executou.
+            if turn.text or turn.tool_calls:
+                await save_memory(lead_id, "assistant", turn.text or "", turn.tool_calls or None)
 
             if turn.stop_reason == "end_turn":
                 break

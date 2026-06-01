@@ -1,6 +1,6 @@
 # backend/tests/test_prompts_regua.py
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, AsyncMock
 from app.agent.prompts import _build_regua
 
 
@@ -52,3 +52,33 @@ async def test_system_prompt_includes_lead_id():
         prompt = await build_system_prompt(lead, "NEW_LEAD_REGISTERED")
 
     assert "abc-123-real-uuid" in prompt
+
+
+async def test_system_prompt_sanitizes_malicious_trigger():
+    """O trigger (vindo do endpoint /run-agent) entra no prompt — control chars devem
+    ser removidos por _safe, fechando a porta de injeção via trigger."""
+    from app.agent.prompts import build_system_prompt
+    lead = {
+        "id": "lead-1", "stage": "REGISTERED", "lead_enrichment": None,
+        "events": {}, "has_companion": False, "whatsapp_consent_at": None,
+    }
+    # trigger desconhecido + control chars → cai no fallback de _build_regua E na linha Trigger
+    evil = "UNKNOWN\x00\x07INJECT"
+    with patch("app.agent.prompts._fetch_last_engagement",
+               new=AsyncMock(return_value=("N/A", "False", "False"))), \
+         patch("app.agent.prompts._fetch_memory",
+               new=AsyncMock(return_value="Sem histórico.")):
+        prompt = await build_system_prompt(lead, evil)
+    assert "\x00" not in prompt and "\x07" not in prompt
+
+
+async def test_fetch_memory_sanitizes_content(monkeypatch):
+    """Conteúdo de lead_memory (gerado por LLM) reentra no prompt — _safe remove control chars."""
+    from app.agent import prompts
+    rows = [{"role": "assistant", "content": "ok\x00\x07 INJECT", "created_at": "2026-05-31T00:00"}]
+    sb = MagicMock()
+    (sb.table.return_value.select.return_value.eq.return_value
+        .order.return_value.limit.return_value.execute.return_value.data) = rows
+    monkeypatch.setattr(prompts, "get_supabase", lambda: sb)
+    out = await prompts._fetch_memory("lead-1")
+    assert "\x00" not in out and "\x07" not in out

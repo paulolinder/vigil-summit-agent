@@ -42,7 +42,9 @@ async def build_system_prompt(lead: dict, trigger: str) -> str:
 
     regua = _build_regua(trigger, event_date, stage, is_dm, has_companion)
 
-    # Sanitize all externally-influenced values before f-string interpolation
+    # Sanitize all externally-influenced values before f-string interpolation.
+    # trigger vem do endpoint /run-agent (string arbitrária) — mesma defesa dos demais.
+    trigger_safe = _safe(trigger, 100)
     sector = _safe(enrichment.get("sector") or "N/A", 60)
     role_val = _safe(enrichment.get("real_role") or lead.get("role") or "profissional", 80)
     company_val = _safe(enrichment.get("company") or lead.get("company") or "empresa", 120)
@@ -61,7 +63,7 @@ PERFIL DO LEAD
 
 Lead ID       : {lead_id}  ← use EXATAMENTE este valor no campo lead_id de TODA tool
 Stage atual   : {stage}
-Trigger       : {trigger}
+Trigger       : {trigger_safe}
 Dias p/ evento: {days_until_event} (15 Ago 2026)
 Último email  : {last_message_at}
 Abriu email   : {last_opened}
@@ -321,7 +323,7 @@ PASSO 2 — Se still não clicou:
     if plan:
         return plan.strip()
 
-    return f"""Trigger desconhecido: {trigger}
+    return f"""Trigger desconhecido: {_safe(trigger, 100)}
 Avalie o stage atual ({stage}) e tome a ação mais adequada para avançar o lead no funil.
 Se stage=REGISTERED, sempre comece com enrich_lead().
 Se stage=ATTENDED ou NO_SHOW, priorize schedule_meeting() para decisores."""
@@ -372,8 +374,10 @@ async def _fetch_memory(lead_id: str) -> str:
         rows.reverse()
         if not rows:
             return "Sem histórico anterior."
+        # _safe nos campos de memória: o content é gerado pelo LLM (e pode refletir
+        # dados/trigger externos) — sanitiza antes de reentrar no system prompt.
         return "\n".join(
-            f"[{r['created_at'][:16]}] {r['role'].upper()}: {r['content'][:300]}"
+            f"[{r['created_at'][:16]}] {_safe(r['role'], 20).upper()}: {_safe(r['content'], 300)}"
             for r in rows
         )
     except Exception:

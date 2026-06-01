@@ -220,6 +220,34 @@ async def test_run_agent_heartbeat_cancelled_on_completion():
     assert len(heartbeat_cancelled) == 1, "Heartbeat task must be cancelled after agent finishes"
 
 
+async def test_tool_only_turn_is_saved_to_memory():
+    """Turno com tool_calls mas texto vazio DEVE gerar memória (auditoria) — antes o
+    guard `if turn.text` descartava tool-use turns sem texto."""
+    mock_sb = _make_sb(lead_data=_LEAD)
+    fake = _FakeAdapter([
+        Turn(text="",  # turno tool-only: sem texto, só tool call
+             tool_calls=[ToolCall(id="t1", name="enrich_lead", input={"lead_id": "lead-001"})],
+             stop_reason="tool_use"),
+        Turn(text="Pronto.", tool_calls=[], stop_reason="end_turn"),
+    ])
+    saved = []
+    async def fake_save(lead_id, role, content, tool_calls=None):
+        saved.append((role, content, tool_calls))
+
+    with patch("app.agent.orchestrator.get_supabase", return_value=mock_sb), \
+         patch("app.agent.lock_manager.get_supabase", return_value=mock_sb), \
+         patch("app.agent.orchestrator.get_adapter", return_value=fake), \
+         patch("app.agent.orchestrator.build_system_prompt", new=AsyncMock(return_value="sys")), \
+         patch("app.agent.orchestrator.save_memory", new=fake_save), \
+         patch("app.agent.orchestrator.execute_tool", new=AsyncMock(return_value="ok")):
+        from app.agent.orchestrator import run_agent
+        await run_agent("lead-001", "NEW_LEAD_REGISTERED")
+
+    # deve haver um registro de assistant com a tool call (mesmo com content vazio)
+    assistant_with_tool = [s for s in saved if s[0] == "assistant" and s[2]]
+    assert assistant_with_tool, "tool-use turn sem texto não foi salvo na memória"
+
+
 async def test_execute_tool_rejects_mismatched_lead_id():
     """Tool executor must refuse to act on a different lead than the authoritative one."""
     from app.agent.tool_executor import execute_tool
