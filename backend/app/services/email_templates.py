@@ -28,6 +28,10 @@ def _esc(value) -> str:
 
 def _button(label: str, url: str, variant: str) -> str:
     """Tabela-botão Outlook-safe. variant: 'primary' (navy) | 'secondary' (lime)."""
+    # Defesa em profundidade: html.escape não neutraliza javascript:/data:. _resolve_cta
+    # já valida o scheme, mas como função pública garantimos o guard aqui também.
+    if not url.startswith(("http://", "https://")):
+        url = "#"
     if variant == "secondary":
         bg, fg = _LIME, _NAVY
     else:
@@ -235,6 +239,7 @@ TEMPLATE_BODIES_HTML: dict[str, str] = {
         f'<p style="{_P}">{{demo_content}}</p>'
         f'<p style="{_P}">A Vigil.AI resolve o que foi discutido: visibilidade contínua de postura, '
         f'priorização inteligente de riscos e relatórios automáticos de conformidade — integrados ao seu ambiente.</p>'
+        f'<p style="{_P}">Para a {{company}}, o caso de uso mais direto seria: {{sector_content}}</p>'
         f'<p style="{_P}">Consigo mostrar isso em 30 minutos, no ambiente de vocês.</p>'
         f'<p style="{_P}">{{custom_note}}</p>'
     ),
