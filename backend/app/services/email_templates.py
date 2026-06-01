@@ -221,6 +221,65 @@ TEMPLATE_BODIES_HTML: dict[str, str] = {
         f'Centro de Convenções Rebouças.</p>'
         f'<p style="{_P}">{{custom_note}}</p>'
     ),
+
+    "thank_you": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Obrigada por ter estado conosco no Vigil Summit.</p>'
+        f'<p style="{_P}">As discussões foram densas — especialmente as mesas sobre {{event_context}}. '
+        f'Gostaria de continuar a conversa sobre como a Vigil.AI se aplica à realidade da {{company}}.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "demo_followup": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">{{demo_content}}</p>'
+        f'<p style="{_P}">A Vigil.AI resolve o que foi discutido: visibilidade contínua de postura, '
+        f'priorização inteligente de riscos e relatórios automáticos de conformidade — integrados ao seu ambiente.</p>'
+        f'<p style="{_P}">Consigo mostrar isso em 30 minutos, no ambiente de vocês.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "pain_point": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Após o Vigil Summit, ficou uma pergunta que quero trazer diretamente para você:</p>'
+        f'<div style="{_SECTOR_BOX}">{{pain_point_content}}</div>'
+        f'<p style="{_P}">Não estou pedindo para agendar uma demo agora — só quero entender se estou mapeando '
+        f'o problema certo. Me responde em duas linhas?</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "breakup": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Tentei contato algumas vezes desde o Vigil Summit, mas entendo que o timing pode não ser ideal.</p>'
+        f'<p style="{_P}">Vou deixar o espaço livre por enquanto. Se em algum momento fizer sentido conversar sobre '
+        f'como empresas do setor de {{sector}} estão resolvendo esses desafios, é só responder este email.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "no_show_missed": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Notamos que você não pôde comparecer ao Vigil Summit. Imprevistos acontecem.</p>'
+        f'<p style="{_EYEBROW}">Resumo dos principais pontos</p>'
+        f'<ul style="margin:0 0 16px;padding-left:20px;">{{event_highlights}}</ul>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+        f'<p style="{_P}">Posso fazer uma sessão privada para você com os mesmos temas. Sem custo, sem compromisso.</p>'
+    ),
+
+    "no_show_demo_offer": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Preparei uma sessão exclusiva para quem não pôde comparecer ao Vigil Summit. Em 30 minutos:</p>'
+        f'<div style="{_SECTOR_BOX}">{{demo_preview}}</div>'
+        f'<p style="{_P}">Tudo adaptado para o contexto de {{company}} no setor de {{sector}}.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "no_show_final": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Esta é minha última tentativa de contato.</p>'
+        f'<p style="{_P}">Se quiser ver como a Vigil.AI funciona para empresas como a {{company}} — detecção de '
+        f'vulnerabilidades, dashboard de postura e conformidade automatizada — o botão abaixo agenda em 1 clique.</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
 }
 
 
