@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import LogoutButton from './LogoutButton'
 
 interface NavbarProps {
   variant?: 'landing' | 'dashboard'
@@ -51,6 +52,8 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
             <Link href="/" className="text-white/50 hover:text-white/80 text-xs transition-colors">
               ← Landing page
             </Link>
+            <div className="w-px h-4 bg-white/20" />
+            <LogoutButton />
           </div>
         )}
       </div>
