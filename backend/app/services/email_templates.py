@@ -126,8 +126,54 @@ def _resolve_cta(template_key: str, cta_url: str | None) -> dict | None:
     return {"label": spec["label"], "url": url, "variant": spec["variant"]}
 
 
-# Preenchido nas Tasks 3-5 (miolos HTML). Mantido aqui para import estável.
-TEMPLATE_BODIES_HTML: dict[str, str] = {}
+_P = 'margin:0 0 16px;'
+_EYEBROW = 'color:#48C2C5;font-size:12px;font-weight:bold;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 8px;'
+_SECTOR_BOX = 'border-left:3px solid #48C2C5;padding:8px 0 8px 16px;margin:0 0 16px;color:#102A34;'
+
+TEMPLATE_BODIES_HTML: dict[str, str] = {
+
+    "welcome": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Sua inscrição no <strong>Vigil Summit — Segurança para a Era da IA</strong> foi confirmada. '
+        f'Estamos reservando sua vaga entre as 120 disponíveis.</p>'
+        f'<p style="{_P}">O Summit acontece em <strong>15 de agosto de 2026</strong>, em São Paulo, com foco em três temas:</p>'
+        f'<ul style="margin:0 0 16px;padding-left:20px;">'
+        f'<li style="margin-bottom:6px;">Zero Trust na prática para ambientes híbridos e multicloud</li>'
+        f'<li style="margin-bottom:6px;">IA aplicada à detecção de ameaças e resposta a incidentes</li>'
+        f'<li style="margin-bottom:6px;">Conformidade automatizada: LGPD, ISO 27001 e SOC 2</li>'
+        f'</ul>'
+        f'<p style="{_P}">{{role_personalization}}</p>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "confirmation_request": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Faltam <strong>14 dias</strong> para o Vigil Summit e sua vaga ainda não foi confirmada.</p>'
+        f'<p style="{_P}">Com 120 participantes e lista de espera ativa, preciso da sua confirmação para garantir '
+        f'o credenciamento e o kit exclusivo do evento.</p>'
+        f'<p style="{_EYEBROW}">Por que vale a presença</p>'
+        f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "confirmation_followup": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Ainda não recebi sua confirmação para o Vigil Summit, que acontece em <strong>10 dias</strong>.</p>'
+        f'<p style="{_P}">Entendo que a agenda de {{role}} é intensa. Por isso serei direto: este é o evento onde '
+        f'CISOs e CTOs de empresas como a {{company}} vão decidir o roadmap de segurança de 2027.</p>'
+        f'<p style="{_EYEBROW}">O que você vai encontrar lá</p>'
+        f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+
+    "warmup": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Com 10 dias para o Vigil Summit, quero garantir que você aproveite cada hora do evento.</p>'
+        f'<p style="{_EYEBROW}">Sessões mais estratégicas para você</p>'
+        f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+    ),
+}
 
 
 def render_html(template_key: str, ctx: dict, cta_url: str | None = None) -> str:
