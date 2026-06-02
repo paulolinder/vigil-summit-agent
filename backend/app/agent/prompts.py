@@ -194,6 +194,17 @@ PASSO 3 — Agendar régua completa (faça todos os schedule_job neste turno)
   schedule_job("DAY_T0",           run_at="{t0}",  condition={{"only_if_stage": "CONFIRMED"}})
 """,
 
+        "LEAD_CONFIRMED": f"""
+PASSO 1 — Verificar engajamento
+  Chame check_engagement().
+
+PASSO 2 — Agradecer a confirmação e enviar a agenda
+  Envie send_pre_event_msg("confirmation_agenda") com custom_note que AGRADECE a
+  confirmação de presença e destaca 2-3 sessões mais relevantes para o cargo/setor do lead.
+  Ângulo: "presença confirmada — aqui está sua agenda personalizada". NÃO repita o tom de
+  cobrança dos emails de confirmação; este é um email de boas-vindas pós-confirmação.
+""",
+
         "CONFIRMATION_T14": f"""
 PASSO 1 — Verificar engajamento
   Chame check_engagement(). Avalie se o lead abriu emails anteriores.

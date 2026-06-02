@@ -82,3 +82,9 @@ async def test_fetch_memory_sanitizes_content(monkeypatch):
     monkeypatch.setattr(prompts, "get_supabase", lambda: sb)
     out = await prompts._fetch_memory("lead-1")
     assert "\x00" not in out and "\x07" not in out
+
+
+def test_lead_confirmed_plan_uses_confirmation_agenda():
+    plan = _build_regua("LEAD_CONFIRMED", None, "CONFIRMED", False, False)
+    assert "send_pre_event_msg" in plan
+    assert "confirmation_agenda" in plan
