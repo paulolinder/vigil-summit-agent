@@ -102,6 +102,8 @@ def test_render_escapes_custom_note():
 
 
 def test_all_17_templates_render():
+    # Nome histórico ("17"); itera dinamicamente TODOS os miolos (hoje 16) — cobre
+    # qualquer template novo automaticamente. Guarda a paridade: nenhum cai no fallback.
     from app.services.email_templates import render_html, TEMPLATE_BODIES_HTML
     for key in TEMPLATE_BODIES_HTML:
         html = render_html(key, _min_ctx(), cta_url="https://cal.com/x")
