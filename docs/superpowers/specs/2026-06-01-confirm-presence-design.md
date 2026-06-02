@@ -34,25 +34,46 @@ que já existe e funciona.
 
 ---
 
-## 3. Token assinado (backend, `app/api/leads.py`)
+## 3. Token assinado (módulo neutro `app/utils/tokens.py` — NOVO)
 
-Duas funções junto do `_hash_token` existente:
+> **Por que módulo novo (evita import circular):** `resend_service.send_email` precisa
+> gerar o `confirm_url` (logo, precisa de `_sign_confirm_token`). Se o token morasse em
+> `api/leads.py`, teríamos o ciclo `leads → orchestrator → tool_executor → resend_service
+> → leads`. Colocar em `app/utils/tokens.py` (sem dependências de app, só `hmac`/`settings`)
+> quebra o ciclo. Tanto `resend_service` quanto `api/leads` importam de lá.
 
 ```python
-def _sign_confirm_token(lead_id: str) -> str:
-    """HMAC-SHA256 stateless do lead_id. Sem tabela, sem expiração."""
-    # secret: settings.confirm_token_secret or settings.api_key (fallback)
-    # retorna f"{lead_id}.{hmac_hex}"
+# app/utils/tokens.py
+import hmac, hashlib
+from app.config import settings
 
-def _verify_confirm_token(token: str) -> str | None:
+def _confirm_secret() -> str:
+    return settings.confirm_token_secret or settings.api_key
+
+def sign_confirm_token(lead_id: str) -> str:
+    """HMAC-SHA256 stateless do lead_id. Sem tabela, sem expiração."""
+    sig = hmac.new(_confirm_secret().encode(), lead_id.encode(), hashlib.sha256).hexdigest()
+    return f"{lead_id}.{sig}"
+
+def verify_confirm_token(token: str) -> str | None:
     """Valida via hmac.compare_digest; retorna lead_id se ok, senão None."""
+    if not token or "." not in token:
+        return None
+    lead_id, _, sig = token.rpartition(".")
+    if not lead_id:
+        return None
+    expected = hmac.new(_confirm_secret().encode(), lead_id.encode(), hashlib.sha256).hexdigest()
+    return lead_id if hmac.compare_digest(sig, expected) else None
 ```
 
 - **Secret:** nova env var **opcional** `confirm_token_secret: str = ""` em `config.py`,
   com **fallback para `api_key`** (sempre presente) → zero config obrigatória nova.
-- Formato do token: `"{lead_id}.{hmac_hexdigest}"`. O `lead_id` é UUID (sem pontos), então
-  o split por `.` é seguro. `compare_digest` para comparação constante.
+- Formato: `"{lead_id}.{hmac_hexdigest}"`. Uso de `rpartition(".")` (não `split`) para
+  robustez. `compare_digest` para comparação constante.
 - Stateless: nada gravado; o link no email carrega o token.
+- **Rotação de chave:** se `confirm_token_secret` (ou `api_key`, no fallback) mudar, **todos
+  os tokens de confirmação em trânsito invalidam** — o lead veria "link inválido" e
+  confirmaria pelo próximo email da régua. Aceitável; documentar no CLAUDE.md.
 
 ---
 
@@ -63,7 +84,7 @@ credencial), **rate-limited `10/minute`** (padrão dos endpoints públicos). Cor
 `{"token": "..."}`.
 
 Fluxo:
-1. `_verify_confirm_token(token)` → inválido/ausente → **404** "Link inválido ou expirado".
+1. `verify_confirm_token(token)` (de `app/utils/tokens.py`) → inválido/ausente → **404** "Link inválido".
 2. `atomic_transition_lead_stage(lead_id, "CONFIRMED", ["ENRICHED"])` —
    RPC atômica (nunca UPDATE cru; invariante do projeto).
 3. Roteia pelo retorno:
@@ -94,20 +115,35 @@ Novo plano no dict `plans`:
 PASSO 1 — Verificar engajamento
   Chame check_engagement().
 
-PASSO 2 — Confirmar e enviar agenda imediata
-  Envie send_pre_event_msg("agenda") com custom_note que AGRADECE a confirmação de
-  presença e destaca 2-3 sessões mais relevantes para o cargo/setor do lead.
+PASSO 2 — Agradecer a confirmação e enviar a agenda
+  Envie send_pre_event_msg("confirmation_agenda") com custom_note que AGRADECE a
+  confirmação de presença e destaca 2-3 sessões mais relevantes para o cargo/setor.
   Ângulo: "presença confirmada — aqui está sua agenda personalizada".
 '''
 ```
 
-- Reusa o template `agenda` (já existe).
+- **NOVO template `confirmation_agenda`** (não reusa `agenda`). Motivo: o corpo do
+  `agenda` diz literalmente "O Vigil Summit acontece em **3 dias**" e "Até **sábado**" —
+  factualmente errado num disparo **imediato** pós-confirmação (o evento pode estar a
+  14 dias). O `confirmation_agenda` tem copy adequada ("Sua presença está confirmada!
+  Reservei a agenda que faz mais sentido para você"), sem âncora temporal fixa, mesmos
+  placeholders (`name`, `sector_content`, `custom_note`) + a programação. Entra em
+  `resend_service.TEMPLATES` (texto) **e** `email_templates.TEMPLATE_BODIES_HTML` (HTML),
+  preservando a paridade validada por teste. Adicionar `"confirmation_agenda"` ao enum de
+  `send_pre_event_msg` em `tools.py`.
 - **Não duplica com `AGENDA_T3`:** o AGENDA_T3 (condição `only_if_stage=CONFIRMED`,
-  dispara em T-3) é a véspera; este é o envio imediato na confirmação. Momentos distintos.
-  O `custom_note` enfatiza "confirmação recebida" para não repetir o mesmo ângulo.
+  T-3) é a véspera; este é o envio imediato na confirmação. Em produção são momentos bem
+  distintos. **No `DEMO_FAST_FORWARD`** a janela é comprimida (AGENDA_T3 em ~now+8min), então
+  o `confirmation_agenda` imediato e o `agenda` do T-3 podem chegar com poucos minutos de
+  diferença — esperado na demo (a régua inteira roda em ~12min); o copy distinto evita que
+  pareçam idênticos.
 - **Destrava a régua existente:** ao virar CONFIRMED, os jobs já agendados
   `AGENDA_T3`/`LOGISTICS_T1`/`DAY_T0` (bloqueados por `only_if_stage=CONFIRMED`) passam a
   disparar nas suas datas. A confirmação só destrava — não recria nem mexe nesses jobs.
+- **Interação com `WARMUP_T10`:** esse passo já tentava mover o lead para CONFIRMED ao
+  detectar clique. Com a confirmação direta, o lead provavelmente já estará CONFIRMED quando
+  o WARMUP_T10 rodar; a RPC é idempotente (`ALREADY_SET`), então **mantém-se** o WARMUP_T10
+  como está — é um fallback inofensivo para quem clicou mas não chegou pela página.
 
 ---
 
@@ -134,9 +170,9 @@ Espelha `frontend/app/deletion-confirm/page.tsx`:
   `confirm_url`. Em `_resolve_cta`: se o template é um **convite de confirmação**
   (`welcome`, `confirmation_request`, `confirmation_followup`) e `confirm_url` está
   presente, o href do CTA é o `confirm_url`; senão, mantém o comportamento atual (landing).
-- `send_email`: gera `confirm_url = f"{FRONTEND_URL}/confirmar?token={_sign_confirm_token(lead_id)}"`
-  e passa a `render_html`. A geração é best-effort (try/except → cai no comportamento
-  atual se falhar; nunca bloqueia o envio).
+- `send_email`: gera `confirm_url = f"{settings.frontend_url}/confirmar?token={sign_confirm_token(lead_id)}"`
+  (import de `app.utils.tokens`) e passa a `render_html`. A geração é best-effort
+  (try/except → cai no comportamento atual se falhar; nunca bloqueia o envio).
 - Os demais templates landing (`warmup`, `vip_briefing`, `agenda`) seguem apontando para a
   landing — inalterados.
 
@@ -152,13 +188,17 @@ Espelha `frontend/app/deletion-confirm/page.tsx`:
 ## 9. Estratégia de testes (TDD)
 
 Backend (`./venv/Scripts/python.exe -m pytest tests/ -q`):
-- **Token:** `_verify_confirm_token(_sign_confirm_token(id)) == id`; token adulterado → `None`;
-  token malformado (sem `.`) → `None`.
+- **Token:** `verify_confirm_token(sign_confirm_token(id)) == id`; token adulterado → `None`;
+  token malformado (sem `.`) → `None`; string vazia → `None`.
 - **Endpoint:** token válido + lead ENRICHED → 200 `confirmed`, transição chamada, agente
   disparado (mock de `run_agent`); token inválido → 404; segunda chamada (lead já CONFIRMED,
   RPC retorna ALREADY_SET) → `already_confirmed` e `run_agent` NÃO chamado de novo.
-- **Régua:** `_build_regua("LEAD_CONFIRMED", ...)` contém `send_pre_event_msg` e `agenda`.
-- **Email:** `render_html("welcome", ctx, confirm_url="https://x/confirmar?token=abc")` →
+- **Régua:** `_build_regua("LEAD_CONFIRMED", ...)` contém `send_pre_event_msg` e
+  `confirmation_agenda`.
+- **Template novo:** `confirmation_agenda` existe em `resend_service.TEMPLATES` E em
+  `email_templates.TEMPLATE_BODIES_HTML` (paridade); renderiza com o ctx mínimo sem KeyError;
+  o copy NÃO contém "3 dias" nem "sábado".
+- **Email/CTA:** `render_html("welcome", ctx, confirm_url="https://x/confirmar?token=abc")` →
   o href do CTA é essa URL; sem `confirm_url` → mantém landing.
 - **Regressão:** suíte existente verde (contrato de `send_email`/`render_html` preservado
   via defaults).
@@ -170,21 +210,26 @@ Frontend: `npx tsc --noEmit` limpo; a página segue o padrão do `deletion-confi
 ## 10. Arquivos afetados
 
 **Criar:**
+- `backend/app/utils/tokens.py` — `sign_confirm_token`/`verify_confirm_token` (módulo neutro).
+- `backend/app/utils/__init__.py` (se ainda não existir o pacote).
 - `frontend/app/confirmar/page.tsx`
 - `frontend/app/api/leads/confirm/route.ts`
 - `backend/tests/test_confirm_presence.py`
 
 **Modificar:**
-- `backend/app/api/leads.py` — `_sign_confirm_token`/`_verify_confirm_token` + endpoint `POST /confirm`.
+- `backend/app/api/leads.py` — endpoint `POST /confirm` (importa de `app.utils.tokens`).
 - `backend/app/agent/prompts.py` — plano `LEAD_CONFIRMED` no `_build_regua`.
-- `backend/app/services/email_templates.py` — `render_html`/`_resolve_cta` aceitam `confirm_url`.
-- `backend/app/services/resend_service.py` — `send_email` gera e passa o `confirm_url`.
+- `backend/app/agent/tools.py` — adiciona `"confirmation_agenda"` ao enum de `send_pre_event_msg`.
+- `backend/app/services/resend_service.py` — novo template `confirmation_agenda` em `TEMPLATES`;
+  `send_email` gera e passa o `confirm_url` (import de `app.utils.tokens`).
+- `backend/app/services/email_templates.py` — `render_html`/`_resolve_cta` aceitam `confirm_url`;
+  novo miolo `confirmation_agenda` em `TEMPLATE_BODIES_HTML`.
 - `backend/app/config.py` — `confirm_token_secret`.
 - `backend/.env.example` — documenta a var.
-- `CLAUDE.md` — nota sobre o fluxo de confirmação por clique.
+- `CLAUDE.md` — nota sobre o fluxo de confirmação por clique + rotação de chave invalida tokens.
 
 **Não muda:** RPC de transição, dashboard, demais templates, a régua existente
-(só é destravada).
+(só é destravada). O `WARMUP_T10` permanece (fallback idempotente).
 
 ---
 
