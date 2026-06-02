@@ -21,7 +21,8 @@ TOOLS = [
                     "type": "string",
                     "enum": [
                         "welcome", "vip_briefing", "warmup", "confirmation_request",
-                        "confirmation_followup", "agenda", "logistics", "day_reminder",
+                        "confirmation_followup", "agenda", "confirmation_agenda",
+                        "logistics", "day_reminder",
                     ],
                 },
                 "custom_note": {"type": "string", "description": "Nota personalizada inserida no template"},

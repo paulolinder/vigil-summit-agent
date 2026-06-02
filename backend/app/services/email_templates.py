@@ -206,6 +206,23 @@ TEMPLATE_BODIES_HTML: dict[str, str] = {
         f'</ul>'
     ),
 
+    "confirmation_agenda": (
+        f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
+        f'<p style="{_P}">Sua presença no Vigil Summit está <strong>confirmada</strong>! Obrigada por reservar seu lugar.</p>'
+        f'<p style="{_EYEBROW}">Sessões selecionadas para você</p>'
+        f'<div style="{_SECTOR_BOX}">{{sector_content}}</div>'
+        f'<p style="{_P}">{{custom_note}}</p>'
+        f'<p style="{_EYEBROW}">Programação</p>'
+        f'<ul style="margin:0 0 16px;padding-left:20px;">'
+        f'<li style="margin-bottom:6px;">8h30 — Credenciamento e café</li>'
+        f'<li style="margin-bottom:6px;">9h00 — Abertura: IA e o novo perímetro de segurança</li>'
+        f'<li style="margin-bottom:6px;">10h30 — Tracks: Zero Trust · IA em Segurança · Conformidade</li>'
+        f'<li style="margin-bottom:6px;">12h30 — Almoço executivo</li>'
+        f'<li style="margin-bottom:6px;">14h00 — Mesas redondas por setor</li>'
+        f'<li style="margin-bottom:6px;">16h30 — Encerramento e networking</li>'
+        f'</ul>'
+    ),
+
     "logistics": (
         f'<p style="{_P}">Olá <strong>{{name}}</strong>,</p>'
         f'<p style="{_P}"><strong>Amanhã é o dia.</strong> Aqui estão as informações de acesso:</p>'

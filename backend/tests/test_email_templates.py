@@ -106,3 +106,15 @@ def test_all_17_templates_render():
     for key in TEMPLATE_BODIES_HTML:
         html = render_html(key, _min_ctx(), cta_url="https://cal.com/x")
         assert "Vigil" in html and len(html) > 200
+
+
+def test_confirmation_agenda_exists_and_no_temporal_anchor():
+    from app.services.resend_service import TEMPLATES
+    from app.services.email_templates import TEMPLATE_BODIES_HTML, render_html
+    assert "confirmation_agenda" in TEMPLATES
+    assert "confirmation_agenda" in TEMPLATE_BODIES_HTML
+    html = render_html("confirmation_agenda", _min_ctx())
+    assert "Vigil" in html
+    # copy de disparo imediato — NÃO pode dizer "3 dias" nem "sábado"
+    body = TEMPLATES["confirmation_agenda"]["body"]
+    assert "3 dias" not in body and "sábado" not in body

@@ -166,6 +166,31 @@ Ana Beatriz Costa
 Account Executive, Vigil.AI"""
     },
 
+    "confirmation_agenda": {
+        "subject": "Presença confirmada, {name} — sua agenda do Vigil Summit",
+        "body": """Olá {name},
+
+Sua presença no Vigil Summit está confirmada! Obrigada por reservar seu lugar.
+
+Selecionei as sessões mais relevantes para o seu perfil:
+
+{sector_content}
+
+{custom_note}
+
+Programação completa:
+→ 8h30 — Credenciamento e café
+→ 9h00 — Abertura: IA e o novo perímetro de segurança
+→ 10h30 — Track 1: Zero Trust | Track 2: IA em Segurança | Track 3: Conformidade
+→ 12h30 — Almoço executivo
+→ 14h00 — Mesas redondas por setor
+→ 16h30 — Encerramento e networking
+
+Nos vemos lá,
+Ana Beatriz Costa
+Account Executive, Vigil.AI"""
+    },
+
     "logistics": {
         "subject": "Vigil Summit amanhã — tudo que você precisa saber",
         "body": """Olá {name},
