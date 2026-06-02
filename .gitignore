@@ -39,3 +39,9 @@ Thumbs.db
 
 # Tools
 .serena/
+
+# Docs internas e instruções de agente (não publicar no repo; mantidas localmente)
+docs/
+CLAUDE.md
+.superpowers/
+.playwright-mcp/
