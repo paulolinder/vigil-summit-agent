@@ -4,6 +4,7 @@ from app.db.models import LeadCreate, LeadStage
 from app.config import settings
 from app.limiter import limiter
 from app.api.auth import require_api_key as _require_api_key
+from app.utils.tokens import verify_confirm_token
 from datetime import datetime, timezone, timedelta
 import hashlib
 import uuid
@@ -80,6 +81,36 @@ async def create_lead(lead_data: LeadCreate, request: Request, background_tasks:
     background_tasks.add_task(run_agent, lead["id"], "NEW_LEAD_REGISTERED")
 
     return {"id": lead["id"], "stage": lead["stage"]}
+
+
+@router.post("/confirm")
+@limiter.limit("10/minute")
+async def confirm_presence(request: Request, payload: dict, background_tasks: BackgroundTasks):
+    """Público: o lead confirma presença clicando no botão do email. O token HMAC
+    (do email) é a credencial — não usa X-API-Key. Move ENRICHED→CONFIRMED e dispara
+    o agente para o email imediato de agenda. Idempotente."""
+    token = (payload or {}).get("token")
+    lead_id = verify_confirm_token(token)
+    if not lead_id:
+        raise HTTPException(status_code=404, detail="Link inválido")
+
+    sb = get_supabase()
+    result = await asyncio.to_thread(lambda: sb.rpc("atomic_transition_lead_stage", {
+        "p_lead_id": lead_id,
+        "p_target_stage": "CONFIRMED",
+        "p_valid_from_stages": ["ENRICHED"],
+    }).execute())
+    outcome = result.data
+
+    if outcome == "OK":
+        from app.agent.orchestrator import run_agent
+        background_tasks.add_task(run_agent, lead_id, "LEAD_CONFIRMED")
+        return {"status": "confirmed"}
+    if outcome == "ALREADY_SET":
+        return {"status": "already_confirmed"}
+    if outcome == "NOT_FOUND":
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+    return {"status": "already_processed"}
 
 
 @router.post("/{lead_id}/checkin", dependencies=[Security(_require_api_key)])

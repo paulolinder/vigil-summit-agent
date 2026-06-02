@@ -47,3 +47,58 @@ def test_token_malformed_returns_none():
     assert verify_confirm_token("no-dot") is None
     assert verify_confirm_token("") is None
     assert verify_confirm_token(None) is None
+
+
+from unittest.mock import patch, MagicMock
+from fastapi.testclient import TestClient
+
+TEST_API_KEY = "test-key-vigil"
+
+
+@pytest.fixture(autouse=True)
+def _patch_key(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+
+
+@pytest.fixture
+def client():
+    with patch("app.scheduler.runner.start_scheduler"):
+        from app.main import app
+        return TestClient(app)
+
+
+def test_confirm_valid_token_confirms_and_runs_agent(client):
+    sb = MagicMock()
+    sb.rpc.return_value.execute.return_value.data = "OK"
+    ran = []
+    async def fake_run(lead_id, trigger):
+        ran.append((lead_id, trigger))
+    with patch("app.api.leads.get_supabase", return_value=sb), \
+         patch("app.agent.orchestrator.run_agent", fake_run):
+        tok = sign_confirm_token("lead-1")
+        resp = client.post("/api/leads/confirm", json={"token": tok})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "confirmed"
+    args = str(sb.rpc.call_args)
+    assert "CONFIRMED" in args and "ENRICHED" in args
+
+
+def test_confirm_invalid_token_404(client):
+    resp = client.post("/api/leads/confirm", json={"token": "garbage"})
+    assert resp.status_code == 404
+
+
+def test_confirm_already_set_does_not_rerun_agent(client):
+    sb = MagicMock()
+    sb.rpc.return_value.execute.return_value.data = "ALREADY_SET"
+    ran = []
+    async def fake_run(lead_id, trigger):
+        ran.append((lead_id, trigger))
+    with patch("app.api.leads.get_supabase", return_value=sb), \
+         patch("app.agent.orchestrator.run_agent", fake_run):
+        tok = sign_confirm_token("lead-1")
+        resp = client.post("/api/leads/confirm", json={"token": tok})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "already_confirmed"
+    assert ran == []
