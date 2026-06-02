@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     cal_event_type_id: str = ""
     cal_webhook_secret: str = ""
     api_key: str = ""  # Header X-API-Key para endpoints operacionais e de leitura
+    confirm_token_secret: str = ""  # secret do token de confirmação; fallback p/ api_key
     stale_job_threshold_hours: int = 2
     demo_fast_forward: bool = False  # comprime a régua (dias→minutos) para a demo
     frontend_url: str = "http://localhost:3030"
