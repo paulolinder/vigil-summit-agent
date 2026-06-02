@@ -22,6 +22,7 @@ async def test_send_email_sends_html_and_text_and_stores_text():
         sent.update(payload)
         return {"id": "resend-1"}
     with patch.object(resend_service, "get_supabase", return_value=sb), \
+         patch.object(resend_service, "sign_confirm_token", return_value="lead-1.fakesig"), \
          patch.object(resend_service.resend.Emails, "send", side_effect=fake_send):
         await resend_service.send_email(_lead(), "welcome", custom_note="Olá", phase="pre_event")
 

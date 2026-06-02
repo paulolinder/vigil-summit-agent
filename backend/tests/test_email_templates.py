@@ -118,3 +118,20 @@ def test_confirmation_agenda_exists_and_no_temporal_anchor():
     # copy de disparo imediato — NÃO pode dizer "3 dias" nem "sábado"
     body = TEMPLATES["confirmation_agenda"]["body"]
     assert "3 dias" not in body and "sábado" not in body
+
+
+def test_render_confirm_url_used_for_confirmation_invites(monkeypatch):
+    from app.services import email_templates
+    from app.services.email_templates import render_html
+    monkeypatch.setattr(email_templates.settings, "frontend_url", "https://x.ai")
+    html = render_html("welcome", _min_ctx(), confirm_url="https://x.ai/confirmar?token=abc")
+    assert "https://x.ai/confirmar?token=abc" in html
+
+
+def test_render_confirm_url_ignored_without_it(monkeypatch):
+    from app.services import email_templates
+    from app.services.email_templates import render_html
+    monkeypatch.setattr(email_templates.settings, "frontend_url", "https://x.ai")
+    html = render_html("welcome", _min_ctx())  # sem confirm_url → CTA aponta landing
+    assert "https://x.ai" in html
+    assert "/confirmar?token=" not in html

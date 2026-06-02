@@ -118,12 +118,17 @@ CTA_MAP: dict[str, dict] = {
 }
 # Sem botão: logistics, day_reminder, pain_point, breakup.
 
+# Templates cujo CTA é um convite de confirmação de presença.
+_CONFIRM_INVITES = {"welcome", "confirmation_request", "confirmation_followup"}
 
-def _resolve_cta(template_key: str, cta_url: str | None) -> dict | None:
+
+def _resolve_cta(template_key: str, cta_url: str | None, confirm_url: str | None) -> dict | None:
     spec = CTA_MAP.get(template_key)
     if not spec:
         return None
-    if spec["dest"] == "calcom" and cta_url and cta_url.startswith(("http://", "https://")):
+    if template_key in _CONFIRM_INVITES and confirm_url and confirm_url.startswith(("http://", "https://")):
+        url = confirm_url
+    elif spec["dest"] == "calcom" and cta_url and cta_url.startswith(("http://", "https://")):
         url = cta_url
     else:
         url = settings.frontend_url
@@ -305,7 +310,7 @@ TEMPLATE_BODIES_HTML: dict[str, str] = {
 }
 
 
-def render_html(template_key: str, ctx: dict, cta_url: str | None = None) -> str:
+def render_html(template_key: str, ctx: dict, cta_url: str | None = None, confirm_url: str | None = None) -> str:
     """Monta o email HTML completo: escape do ctx → miolo → shell com CTA + chip."""
     escaped = {k: _esc(v) for k, v in ctx.items()}
     # event_highlights vira lista visual (split por linha, DEPOIS do escape)
@@ -316,7 +321,7 @@ def render_html(template_key: str, ctx: dict, cta_url: str | None = None) -> str
         )
     inner_tpl = TEMPLATE_BODIES_HTML.get(template_key, "<p>{custom_note}</p>")
     inner = inner_tpl.format(**escaped)
-    cta = _resolve_cta(template_key, cta_url)
+    cta = _resolve_cta(template_key, cta_url, confirm_url)
     # _perso_chip recebe o ctx CRU (não-escapado) de propósito: ele já aplica _esc
     # internamente. NÃO passe `escaped` aqui (evita escape duplo).
     chip = _perso_chip(ctx.get("role"), ctx.get("sector"))

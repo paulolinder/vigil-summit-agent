@@ -4,6 +4,7 @@ import resend
 from app.config import settings
 from app.db.client import get_supabase
 from app.services.email_templates import render_html
+from app.utils.tokens import sign_confirm_token
 from datetime import datetime, timezone
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -514,7 +515,8 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
     # HTML é best-effort: se render falhar, envia só texto (nunca bloqueia o envio).
     # Loga a falha — senão um template quebrado degradaria todos os emails p/ texto sem sinal.
     try:
-        html_body = render_html(template_key, ctx, cta_url)
+        confirm_url = f"{settings.frontend_url}/confirmar?token={sign_confirm_token(lead['id'])}"
+        html_body = render_html(template_key, ctx, cta_url, confirm_url)
     except Exception as e:
         logging.getLogger(__name__).warning("Falha ao renderizar HTML do template %s: %s", template_key, e)
         html_body = None
