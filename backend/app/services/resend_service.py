@@ -512,13 +512,13 @@ async def send_email(lead: dict, template_key: str, custom_note: str = "", phase
     subject = template["subject"].format(**ctx)
     body = template["body"].format(**ctx)
 
-    # HTML é best-effort: se render falhar, envia só texto (nunca bloqueia o envio).
-    # Loga a falha — senão um template quebrado degradaria todos os emails p/ texto sem sinal.
+    # HTML é best-effort: se a geração do token OU o render falhar, envia só texto
+    # (nunca bloqueia o envio). Loga a falha — senão degradaria todos os emails p/ texto sem sinal.
     try:
         confirm_url = f"{settings.frontend_url}/confirmar?token={sign_confirm_token(lead['id'])}"
         html_body = render_html(template_key, ctx, cta_url, confirm_url)
     except Exception as e:
-        logging.getLogger(__name__).warning("Falha ao renderizar HTML do template %s: %s", template_key, e)
+        logging.getLogger(__name__).warning("Falha ao gerar token/renderizar HTML do template %s: %s", template_key, e)
         html_body = None
 
     sb = get_supabase()
