@@ -110,6 +110,9 @@ async def confirm_presence(request: Request, payload: dict, background_tasks: Ba
         return {"status": "already_confirmed"}
     if outcome == "NOT_FOUND":
         raise HTTPException(status_code=404, detail="Lead não encontrado")
+    # INVALID_TRANSITION (lead já passou de CONFIRMED, ex.: ATTENDED). Diferente de
+    # checkin/no-show (operacionais, X-API-Key) que retornam 409: aqui é um endpoint
+    # PÚBLICO acionado por clique de email — 200 idempotente é melhor UX que expor um erro.
     return {"status": "already_processed"}
 
 

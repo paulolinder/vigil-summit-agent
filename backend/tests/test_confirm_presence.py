@@ -1,5 +1,10 @@
 import pytest
+from unittest.mock import patch, MagicMock
+from fastapi.testclient import TestClient
+
 from app.utils.tokens import sign_confirm_token, verify_confirm_token
+
+TEST_API_KEY = "test-key-vigil"
 
 
 @pytest.fixture(autouse=True)
@@ -49,12 +54,6 @@ def test_token_malformed_returns_none():
     assert verify_confirm_token(None) is None
 
 
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-
-TEST_API_KEY = "test-key-vigil"
-
-
 @pytest.fixture(autouse=True)
 def _patch_key(monkeypatch):
     from app.config import settings
@@ -72,7 +71,7 @@ def test_confirm_valid_token_confirms_and_runs_agent(client):
     sb = MagicMock()
     sb.rpc.return_value.execute.return_value.data = "OK"
     ran = []
-    async def fake_run(lead_id, trigger):
+    def fake_run(lead_id, trigger):  # TestClient não awaita BackgroundTasks; sync basta
         ran.append((lead_id, trigger))
     with patch("app.api.leads.get_supabase", return_value=sb), \
          patch("app.agent.orchestrator.run_agent", fake_run):
@@ -93,7 +92,7 @@ def test_confirm_already_set_does_not_rerun_agent(client):
     sb = MagicMock()
     sb.rpc.return_value.execute.return_value.data = "ALREADY_SET"
     ran = []
-    async def fake_run(lead_id, trigger):
+    def fake_run(lead_id, trigger):  # ALREADY_SET nem deve agendar o task; ran fica vazio
         ran.append((lead_id, trigger))
     with patch("app.api.leads.get_supabase", return_value=sb), \
          patch("app.agent.orchestrator.run_agent", fake_run):
